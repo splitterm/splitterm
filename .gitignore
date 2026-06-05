@@ -93,3 +93,6 @@ out/
 
 # Local planning notes (not tracked)
 plans/
+
+# Misc / OS cruft
+*.stackdump

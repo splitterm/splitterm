@@ -69,6 +69,6 @@ module.exports = {
     // See type-only imports too, so a cross-process `import type` is still caught.
     tsPreCompilationDeps: true,
     doNotFollow: { path: 'node_modules' },
-    exclude: { path: '\\.css$' },
+    exclude: { path: '(\\.css|\\.test\\.ts)$' },
   },
 };
