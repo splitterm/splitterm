@@ -4,7 +4,7 @@ import '../styles/tokens.css';
 import '../styles/base.css';
 import { ipc } from '@platform/ipc-client';
 import { initPortBridge } from '@platform/pty-port';
-import { createTerminalTile } from '@features/terminal';
+import { createTiling } from '@features/tiling';
 import { createTopbar } from '../chrome/topbar';
 import { createSidebar } from '../chrome/sidebar';
 
@@ -14,15 +14,17 @@ initPortBridge();
 const root = document.getElementById('app');
 if (!root) throw new Error('#app root not found');
 
-// Sidebar drawer (empty for now) — toggled from the topbar's far-left icon.
-const sidebar = createSidebar();
-const topbar = createTopbar({ onToggleSidebar: () => sidebar.toggle() });
-
+// Body is a push layout: [sidebar | tiles]. The sidebar column animates open and shifts the
+// tiles right. Toggled from the topbar's far-left icon.
 const body = document.createElement('main');
 body.className = 'body';
-const terminalHost = document.createElement('div');
-terminalHost.className = 'terminal-host';
-body.append(terminalHost, sidebar.element); // drawer overlays the terminal, no reflow
+const tilingHost = document.createElement('div');
+tilingHost.className = 'terminal-host';
+
+const sidebar = createSidebar(body);
+const topbar = createTopbar({ onToggleSidebar: () => sidebar.toggle() });
+
+body.append(sidebar.panel, tilingHost); // column 1 = sidebar, column 2 = tiles
 
 const statusbar = document.createElement('footer');
 statusbar.className = 'statusbar';
@@ -33,7 +35,7 @@ statusbar.innerHTML = `
 
 root.replaceChildren(topbar, body, statusbar);
 
-createTerminalTile(terminalHost)
+createTiling(tilingHost)
   .then(() => {
     const status = document.getElementById('shell-status');
     if (status) status.textContent = 'ready';

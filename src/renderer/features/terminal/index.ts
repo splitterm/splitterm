@@ -5,20 +5,24 @@ import { DEFAULTS } from '@shared/domain/settings.schema';
 import type { TermId } from '@shared/ids';
 import { ipc } from '@platform/ipc-client';
 import { registerTerminal, unregisterTerminal, writeToPty, resizePty, ackPty } from '@platform/pty-port';
+import { registerPane, deletePane } from '@platform/pane-registry';
 import { readTerminalTheme } from './theme';
 
-export interface TerminalTile {
-  id: TermId;
-  term: Terminal;
-  dispose(): void;
+export interface TerminalInstance {
+  termId: TermId;
+  /** stable element to mount into a tile cell (re-parented by the tiling engine) */
+  el: HTMLElement;
 }
 
 /**
- * Create one xterm terminal in `container`, spawn a shell for it, and wire the firehose.
- * M1: a single tile with the DOM renderer + fit + flow-control acks. WebGL pooling and the
- * tiling layout land in M2.
+ * Create an xterm terminal in its own stable element, spawn a shell, and register a pane handle.
+ * The element starts detached; the tiling engine appends it to a cell, at which point the
+ * ResizeObserver fits it to the real size. M2 uses the DOM renderer; WebGL pooling lands in M2b.
  */
-export async function createTerminalTile(container: HTMLElement): Promise<TerminalTile> {
+export async function createTerminal(): Promise<TerminalInstance> {
+  const el = document.createElement('div');
+  el.className = 'term-pane';
+
   const term = new Terminal({
     allowProposedApi: true,
     scrollback: DEFAULTS.terminal.scrollback,
@@ -29,10 +33,9 @@ export async function createTerminalTile(container: HTMLElement): Promise<Termin
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
-  term.open(container);
-  fit.fit();
+  term.open(el);
 
-  const { id } = await ipc.pty.spawn({ cols: term.cols, rows: term.rows });
+  const { id } = await ipc.pty.spawn({ cols: term.cols || 80, rows: term.rows || 24 });
 
   registerTerminal(
     id,
@@ -40,27 +43,37 @@ export async function createTerminalTile(container: HTMLElement): Promise<Termin
     // Local exit banner — the host session is already gone, so it isn't flow-controlled.
     (code) => term.write(`\r\n\x1b[90m[process exited: ${code}]\x1b[0m\r\n`),
   );
-
-  // Keep the shell's cols/rows in sync with the PTY.
-  resizePty(id, term.cols, term.rows);
   term.onData((d) => writeToPty(id, d));
 
-  const observer = new ResizeObserver(() => {
-    fit.fit();
-    resizePty(id, term.cols, term.rows);
-  });
-  observer.observe(container);
+  // rAF-coalesce fits so a gutter drag (many size observations/sec) refits at most once per frame
+  // instead of thrashing the expensive FitAddon.fit() + a PTY resize on every observation.
+  let fitScheduled = false;
+  const refit = (): void => {
+    if (fitScheduled) return;
+    fitScheduled = true;
+    requestAnimationFrame(() => {
+      fitScheduled = false;
+      if (el.isConnected && el.clientWidth > 0 && el.clientHeight > 0) {
+        fit.fit();
+        resizePty(id, term.cols, term.rows);
+      }
+    });
+  };
+  const observer = new ResizeObserver(refit);
+  observer.observe(el);
 
-  term.focus();
-
-  return {
-    id,
-    term,
-    dispose() {
+  registerPane(id, {
+    el,
+    focus: () => term.focus(),
+    fit: refit,
+    dispose: () => {
       observer.disconnect();
       unregisterTerminal(id);
       ipc.pty.kill({ id });
       term.dispose();
+      deletePane(id);
     },
-  };
+  });
+
+  return { termId: id, el };
 }
