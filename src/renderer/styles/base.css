@@ -1,3 +1,5 @@
+@import 'tailwindcss';
+
 /* Reset + full-bleed app shell. JetBrains-clean: hairlines, high density, no shadows. */
 
 *,
@@ -29,20 +31,12 @@ body {
   grid-template-rows: var(--titlebar-h) 1fr var(--statusbar-h);
 }
 
-/* Title bar — draggable; leave space for native window controls via the overlay. */
-.titlebar {
-  display: flex;
-  align-items: center;
-  padding: 0 var(--sp-5);
-  background: var(--bg-app);
-  border-bottom: 1px solid var(--border);
+/* Window drag regions — not expressible as Tailwind utilities. */
+.app-drag {
   -webkit-app-region: drag;
 }
-.titlebar .brand {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text-secondary);
+.app-no-drag {
+  -webkit-app-region: no-drag;
 }
 
 /* Body — where the tiling grid + terminals will live. */
