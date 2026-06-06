@@ -89,6 +89,17 @@ body {
   height: 100%;
 }
 
+/* Smooth pane split/close/zoom via the View Transitions API (Chromium 148). */
+::view-transition-group(*) {
+  animation-duration: var(--motion-base);
+  animation-timing-function: var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*) {
+    animation-duration: 0.01ms;
+  }
+}
+
 /* Status bar */
 .statusbar {
   display: flex;

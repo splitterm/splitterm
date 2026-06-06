@@ -1,8 +1,10 @@
 // BSP tiling engine. Renders the layout tree as nested CSS Grid and re-parents STABLE xterm
 // elements between cells (never remounts — preserves scrollback/state). Drag-resize adjusts
 // `fr` ratios live; per-pane ResizeObserver refits. See architecture.md §5, project-structure.md §7.
+import { X } from 'lucide';
 import { createTerminal } from '@features/terminal';
 import { getPane } from '@platform/pane-registry';
+import { icon } from '../../chrome/icons';
 import {
   type LayoutNode,
   type LeafNode,
@@ -31,6 +33,29 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   let maximizedId: string | null = null;
   let leafSeq = 0;
   let dragging = false;
+  let adding = false;
+
+  const prefersReducedMotion = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Apply a layout change with a smooth View Transition (Chromium 148) when motion is allowed.
+  function applyLayout(mutate: () => void): void {
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    if (typeof doc.startViewTransition === 'function' && !prefersReducedMotion()) {
+      doc.startViewTransition(() => mutate());
+    } else {
+      mutate();
+    }
+  }
+
+  // Re-render with a transition, then move xterm focus to the active pane (after the DOM updates).
+  function relayout(focusId?: string): void {
+    if (focusId) focusedLeafId = focusId;
+    applyLayout(() => {
+      render();
+      const node = focusedLeafId && root ? findLeaf(root, focusedLeafId) : null;
+      if (node) getPane(node.termId)?.focus();
+    });
+  }
 
   async function makeLeaf(profileId?: string): Promise<LeafNode> {
     const { termId } = await createTerminal(profileId);
@@ -69,8 +94,9 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
 
   function buildLeaf(node: LeafNode): HTMLElement {
     const cell = document.createElement('div');
-    cell.className = 'relative min-w-0 min-h-0 overflow-hidden';
+    cell.className = 'group relative min-w-0 min-h-0 overflow-hidden';
     cell.dataset.leafId = node.id;
+    cell.style.setProperty('view-transition-name', `pane-${node.id}`); // morph across layout changes
     if (node.id === focusedLeafId) cell.classList.add(FOCUS_RING);
     const pane = getPane(node.termId);
     if (pane) cell.appendChild(pane.el);
@@ -79,7 +105,27 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
       () => focusLeaf(node.id),
       { capture: true }, // focus the tile, but let the event reach xterm for cursor/selection
     );
+    cell.appendChild(makeCloseButton(node.id));
     return cell;
+  }
+
+  function makeCloseButton(leafId: string): HTMLElement {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.title = 'Close pane';
+    btn.setAttribute('aria-label', 'Close pane');
+    btn.className =
+      'app-no-drag absolute top-1 right-1 z-10 inline-flex items-center justify-center w-5 h-5 ' +
+      'rounded-[var(--r-sm)] cursor-pointer opacity-0 group-hover:opacity-100 ' +
+      'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] ' +
+      'transition-opacity ease-[var(--ease-out)] duration-[var(--motion-fast)]';
+    btn.appendChild(icon(X, 13));
+    btn.addEventListener('mousedown', (e) => e.stopPropagation()); // don't trigger focus/drag
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeById(leafId);
+    });
+    return btn;
   }
 
   function buildSplit(node: SplitNode): HTMLElement {
@@ -184,38 +230,49 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
       return;
     }
     root = splitLeaf(root, activeId, dir, node);
-    focusedLeafId = node.id;
-    render();
-    focusLeaf(node.id);
+    relayout(node.id);
   }
 
+  // Button path. The re-entrancy guard collapses the duplicate click a frameless titlebar can
+  // fire on the first interaction into one terminal, while still allowing intentional sequential
+  // presses (the guard clears once the spawn completes).
   async function addTerminal(profileId?: string): Promise<void> {
-    await splitActive(autoSplitDir(), profileId);
+    if (adding) return;
+    adding = true;
+    try {
+      await splitActive(autoSplitDir(), profileId);
+    } finally {
+      adding = false;
+    }
   }
 
-  function closeActive(): void {
-    const activeId = focusedLeafId;
-    if (!root || !activeId) return;
-    const target = findLeaf(root, activeId);
+  function closeById(leafId: string): void {
+    if (!root) return;
+    const target = findLeaf(root, leafId);
     if (!target) return;
-    root = closeLeaf(root, activeId);
-    getPane(target.termId)?.dispose();
-    if (maximizedId === activeId) maximizedId = null;
+    const termId = target.termId;
+    root = closeLeaf(root, leafId);
+    getPane(termId)?.dispose();
+    if (maximizedId === leafId) maximizedId = null;
 
     if (!root) {
       void initFirst(); // never leave the user with no terminal
       return;
     }
-    focusedLeafId = collectLeaves(root)[0]?.id ?? null;
-    render();
-    if (focusedLeafId) focusLeaf(focusedLeafId);
+    if (!focusedLeafId || focusedLeafId === leafId || !findLeaf(root, focusedLeafId)) {
+      focusedLeafId = collectLeaves(root)[0]?.id ?? null;
+    }
+    relayout();
+  }
+
+  function closeActive(): void {
+    if (focusedLeafId) closeById(focusedLeafId);
   }
 
   function toggleZoom(): void {
     if (!focusedLeafId) return;
     maximizedId = maximizedId ? null : focusedLeafId;
-    render();
-    if (focusedLeafId) focusLeaf(focusedLeafId);
+    relayout();
   }
 
   type FocusDir = 'left' | 'right' | 'up' | 'down';
