@@ -27,6 +27,7 @@ const topbar = createTopbar({
   onToggleSidebar: () => sidebar.toggle(),
   onNewTerminal: () => void tiling?.addTerminal(),
   onPickProfile: (id) => void tiling?.addTerminal(id),
+  onRemoveTerminal: () => tiling?.removeLast(),
 });
 
 body.append(sidebar.panel, tilingHost); // column 1 = sidebar, column 2 = tiles

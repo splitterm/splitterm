@@ -4,7 +4,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['.vite/**', 'out/**', 'node_modules/**', 'plans/**', '*.config.*', '**/*.cjs'] },
+  { ignores: ['.vite/**', 'out/**', 'node_modules/**', 'plans/**', 'scripts/**', '*.config.*', '**/*.cjs'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

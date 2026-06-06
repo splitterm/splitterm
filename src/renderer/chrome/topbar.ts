@@ -8,6 +8,7 @@ export function createTopbar(opts: {
   onToggleSidebar: () => void;
   onNewTerminal: () => void;
   onPickProfile: (profileId: string) => void;
+  onRemoveTerminal: () => void;
 }): HTMLElement {
   const bar = document.createElement('header');
   bar.className =
@@ -30,6 +31,7 @@ export function createTopbar(opts: {
   const newTerminal = createNewTerminalButton({
     onNew: opts.onNewTerminal,
     onPick: opts.onPickProfile,
+    onRemove: opts.onRemoveTerminal,
   });
 
   bar.append(toggle, brand, newTerminal);

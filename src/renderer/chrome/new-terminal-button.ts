@@ -1,6 +1,6 @@
 // "New terminal" split-button: [ + | ▾ ]. The plus opens a new terminal with the default shell;
 // the chevron opens a dropdown of detected shell profiles. Lucide icons; pointer cursor.
-import { Plus, ChevronDown } from 'lucide';
+import { Plus, ChevronDown, Minus } from 'lucide';
 import { icon } from './icons';
 import { ipc } from '@platform/ipc-client';
 
@@ -12,6 +12,7 @@ const BTN =
 export function createNewTerminalButton(opts: {
   onNew: () => void;
   onPick: (profileId: string) => void;
+  onRemove: () => void;
 }): HTMLElement {
   const group = document.createElement('div');
   group.className = 'app-no-drag flex items-center rounded-[var(--r-sm)] overflow-hidden';
@@ -98,6 +99,14 @@ export function createNewTerminalButton(opts: {
 
   chevron.addEventListener('click', () => void openMenu());
 
-  group.append(plus, chevron);
+  const minus = document.createElement('button');
+  minus.type = 'button';
+  minus.title = 'Close last terminal';
+  minus.setAttribute('aria-label', 'Close last terminal');
+  minus.className = `${BTN} w-7`;
+  minus.appendChild(icon(Minus, 16));
+  minus.addEventListener('click', () => opts.onRemove());
+
+  group.append(plus, chevron, minus);
   return group;
 }

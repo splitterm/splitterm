@@ -59,11 +59,10 @@ export function splitLeaf(node: LayoutNode, targetId: string, dir: Dir, newLeaf:
   if (idx >= 0) {
     const target = node.children[idx]!;
     if (node.dir === dir) {
-      const r = node.ratios[idx] ?? 1 / node.children.length;
       const children = [...node.children];
       children.splice(idx + 1, 0, newLeaf);
-      const ratios = [...node.ratios];
-      ratios.splice(idx, 1, r / 2, r / 2);
+      // Equalize siblings so panes stay gleichmäßig (no progressive shrinking).
+      const ratios = new Array<number>(children.length).fill(1 / children.length);
       return { ...node, children, ratios };
     }
     const children = [...node.children];

@@ -22,8 +22,10 @@ const FOCUS_RING = 'shadow-[inset_0_0_0_1px_var(--accent)]';
 const MIN_RATIO = 0.05;
 
 export interface Tiling {
-  /** Add a terminal by splitting the focused pane along its longer axis. */
+  /** Add a terminal by splitting the largest pane (even tiling). */
   addTerminal(profileId?: string): Promise<void>;
+  /** Close the most-recently-created terminal (keeps at least one). */
+  removeLast(): void;
   dispose(): void;
 }
 
@@ -33,15 +35,22 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   let maximizedId: string | null = null;
   let leafSeq = 0;
   let dragging = false;
-  let adding = false;
+  let lastAdd = 0;
+  let lastRemove = 0;
+  const order: string[] = []; // leaf ids in creation order (existing leaves only)
 
   const prefersReducedMotion = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // Apply a layout change with a smooth View Transition (Chromium 148) when motion is allowed.
   function applyLayout(mutate: () => void): void {
-    const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    const doc = document as Document & {
+      startViewTransition?: (cb: () => void) => { finished?: Promise<unknown> };
+    };
     if (typeof doc.startViewTransition === 'function' && !prefersReducedMotion()) {
-      doc.startViewTransition(() => mutate());
+      const transition = doc.startViewTransition(() => mutate());
+      // Captured panes are restored to normal layout only after the transition finishes — refit
+      // then so any freshly-attached terminal gets its final size (and never stays blank).
+      void transition.finished?.then(() => refitAll());
     } else {
       mutate();
     }
@@ -59,19 +68,43 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
 
   async function makeLeaf(profileId?: string): Promise<LeafNode> {
     const { termId } = await createTerminal(profileId);
-    return leaf(`leaf-${++leafSeq}`, termId);
+    const node = leaf(`leaf-${++leafSeq}`, termId);
+    order.push(node.id);
+    return node;
   }
 
-  /** Split direction that keeps panes roughly square: split the focused cell's longer axis. */
-  function autoSplitDir(): Dir {
-    if (focusedLeafId) {
-      const cell = container.querySelector<HTMLElement>(`[data-leaf-id="${CSS.escape(focusedLeafId)}"]`);
-      if (cell) {
-        const r = cell.getBoundingClientRect();
-        return r.width >= r.height ? 'row' : 'col';
-      }
+  // Discard a just-created leaf that won't be placed (kills its pty, untracks it).
+  function dropLeaf(node: LeafNode): void {
+    const oi = order.indexOf(node.id);
+    if (oi >= 0) order.splice(oi, 1);
+    getPane(node.termId)?.dispose();
+  }
+
+  /** Split direction that keeps a pane roughly square: split its longer axis. */
+  function autoSplitDirFor(leafId: string): Dir {
+    const cell = container.querySelector<HTMLElement>(`[data-leaf-id="${CSS.escape(leafId)}"]`);
+    if (cell) {
+      const r = cell.getBoundingClientRect();
+      return r.width >= r.height ? 'row' : 'col';
     }
     return 'row';
+  }
+
+  /** The largest visible leaf — splitting it (not the focused one) keeps panes even. */
+  function largestLeafId(): string | null {
+    let bestId: string | null = null;
+    let bestArea = -1;
+    container.querySelectorAll<HTMLElement>('[data-leaf-id]').forEach((el) => {
+      const id = el.dataset.leafId;
+      if (!id) return;
+      const r = el.getBoundingClientRect();
+      const area = r.width * r.height;
+      if (area > bestArea) {
+        bestArea = area;
+        bestId = id;
+      }
+    });
+    return bestId;
   }
 
   // ---- rendering ----------------------------------------------------------
@@ -94,7 +127,9 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
 
   function buildLeaf(node: LeafNode): HTMLElement {
     const cell = document.createElement('div');
-    cell.className = 'group relative min-w-0 min-h-0 overflow-hidden';
+    // h-full/w-full so a single leaf (direct child of the container) and the maximized leaf fill
+    // it — the xterm inside is absolutely positioned, so without this the cell collapses to 0 height.
+    cell.className = 'group relative h-full w-full min-w-0 min-h-0 overflow-hidden';
     cell.dataset.leafId = node.id;
     cell.style.setProperty('view-transition-name', `pane-${node.id}`); // morph across layout changes
     if (node.id === focusedLeafId) cell.classList.add(FOCUS_RING);
@@ -184,7 +219,7 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
 
   function render(): void {
     if (!root) {
-      container.replaceChildren();
+      container.replaceChildren(emptyState());
       return;
     }
     if (maximizedId) {
@@ -207,6 +242,19 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     });
   }
 
+  function emptyState(): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'absolute inset-0 flex flex-col items-center justify-center gap-1 select-none';
+    const title = document.createElement('div');
+    title.className = 'text-[13px] text-[var(--text-secondary)]';
+    title.textContent = 'No terminal open';
+    const hint = document.createElement('div');
+    hint.className = 'text-[11px] text-[var(--text-disabled)]';
+    hint.textContent = 'Press + to open a terminal';
+    wrap.append(title, hint);
+    return wrap;
+  }
+
   // ---- operations ---------------------------------------------------------
 
   function focusLeaf(id: string): void {
@@ -218,45 +266,73 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     if (node) getPane(node.termId)?.focus();
   }
 
-  async function splitActive(dir: Dir, profileId?: string): Promise<void> {
-    const activeId = focusedLeafId;
-    if (!root || !activeId) return;
+  async function doSplit(targetId: string, dir: Dir, profileId?: string): Promise<void> {
+    if (!root) return;
     maximizedId = null;
     const node = await makeLeaf(profileId);
-    // The focused leaf could have been closed while we awaited the new terminal — if so,
-    // discard the freshly-spawned terminal rather than inserting an orphan leaf.
-    if (!root || !findLeaf(root, activeId)) {
-      getPane(node.termId)?.dispose();
+    // The target could have been closed while we awaited the spawn — drop the orphan if so.
+    if (!root || !findLeaf(root, targetId)) {
+      dropLeaf(node);
       return;
     }
-    root = splitLeaf(root, activeId, dir, node);
+    root = splitLeaf(root, targetId, dir, node);
     relayout(node.id);
   }
 
-  // Button path. The re-entrancy guard collapses the duplicate click a frameless titlebar can
-  // fire on the first interaction into one terminal, while still allowing intentional sequential
-  // presses (the guard clears once the spawn completes).
-  async function addTerminal(profileId?: string): Promise<void> {
-    if (adding) return;
-    adding = true;
-    try {
-      await splitActive(autoSplitDir(), profileId);
-    } finally {
-      adding = false;
+  // The first terminal (empty → one pane). Rendered DIRECTLY (no View Transition): a brand-new
+  // xterm must size on attach, and wrapping that first render in a transition leaves it blank
+  // until a later re-render. Drops itself if another add won the race.
+  async function createFirst(profileId?: string): Promise<void> {
+    const node = await makeLeaf(profileId);
+    if (root) {
+      dropLeaf(node);
+      return;
     }
+    root = node;
+    focusedLeafId = node.id;
+    render();
+    focusLeaf(node.id);
+  }
+
+  // Keyboard split: split the FOCUSED pane (or open the first terminal when empty).
+  function splitActive(dir: Dir): void {
+    if (!root) {
+      void addTerminal();
+      return;
+    }
+    if (focusedLeafId) void doSplit(focusedLeafId, dir);
+  }
+
+  // Button "+": open exactly one terminal. When empty, create the first; otherwise add evenly by
+  // splitting the LARGEST pane along its longer axis (half/half, then stacked, then a grid). The
+  // time guard collapses the duplicate click a frameless titlebar fires on first interaction.
+  async function addTerminal(profileId?: string): Promise<void> {
+    const now = performance.now();
+    if (now - lastAdd < 350) return;
+    lastAdd = now;
+    if (!root) {
+      await createFirst(profileId);
+      return;
+    }
+    const targetId = largestLeafId() ?? focusedLeafId;
+    if (!targetId) return;
+    await doSplit(targetId, autoSplitDirFor(targetId), profileId);
   }
 
   function closeById(leafId: string): void {
     if (!root) return;
     const target = findLeaf(root, leafId);
     if (!target) return;
+    const oi = order.indexOf(leafId);
+    if (oi >= 0) order.splice(oi, 1);
     const termId = target.termId;
     root = closeLeaf(root, leafId);
     getPane(termId)?.dispose();
     if (maximizedId === leafId) maximizedId = null;
 
     if (!root) {
-      void initFirst(); // never leave the user with no terminal
+      focusedLeafId = null;
+      applyLayout(render); // back to the empty state (animated)
       return;
     }
     if (!focusedLeafId || focusedLeafId === leafId || !findLeaf(root, focusedLeafId)) {
@@ -267,6 +343,22 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
 
   function closeActive(): void {
     if (focusedLeafId) closeById(focusedLeafId);
+  }
+
+  // Button "−": close the most-recently-created terminal that still exists (down to empty).
+  // Time-guarded like the add button so a duplicate first-click can't remove two.
+  function removeLast(): void {
+    const now = performance.now();
+    if (now - lastRemove < 350) return;
+    lastRemove = now;
+    if (!root) return;
+    for (let i = order.length - 1; i >= 0; i--) {
+      const id = order[i];
+      if (id && findLeaf(root, id)) {
+        closeById(id);
+        return;
+      }
+    }
   }
 
   function toggleZoom(): void {
@@ -346,20 +438,12 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
 
   // ---- lifecycle ----------------------------------------------------------
 
-  async function initFirst(): Promise<void> {
-    const node = await makeLeaf();
-    root = node;
-    focusedLeafId = node.id;
-    maximizedId = null;
-    render();
-    focusLeaf(node.id);
-  }
-
   window.addEventListener('keydown', onKeydown, { capture: true });
-  await initFirst();
+  render(); // start empty — the first terminal opens on the first "+" (or Alt+Shift+= / -)
 
   return {
     addTerminal,
+    removeLast,
     dispose() {
       window.removeEventListener('keydown', onKeydown, { capture: true });
       if (root) for (const lf of collectLeaves(root)) getPane(lf.termId)?.dispose();

@@ -23,6 +23,8 @@ describe('layout-tree', () => {
     expect(s.children).toHaveLength(3);
     expect(s.ratios).toHaveLength(3);
     expect(Math.abs(s.ratios.reduce((a, b) => a + b, 0) - 1)).toBeLessThan(1e-9);
+    // siblings stay equal (gleichmäßig), not progressively halved
+    s.ratios.forEach((r) => expect(r).toBeCloseTo(1 / 3, 6));
   });
 
   it('nests a sub-split when splitting in the cross direction', () => {
