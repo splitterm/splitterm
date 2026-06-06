@@ -17,7 +17,13 @@ interface Session {
 
 const sessions = new Map<number, Session>();
 
-export function spawnPty(id: TermId, opts: SpawnRequest, port: PortLike, shell: ResolvedShell): void {
+export function spawnPty(
+  id: TermId,
+  opts: SpawnRequest,
+  port: PortLike,
+  shell: ResolvedShell,
+  startupCommand?: string,
+): void {
   const pty = spawn(shell.file, shell.args, {
     name: 'xterm-256color',
     cols: opts.cols > 0 ? opts.cols : 80,
@@ -30,8 +36,18 @@ export function spawnPty(id: TermId, opts: SpawnRequest, port: PortLike, shell: 
   const session: Session = { pty, sent: 0, acked: 0, paused: false };
   sessions.set(id, session);
 
+  let startupSent = !startupCommand;
   pty.onData((data) => {
     port.postMessage({ t: 'data', id, data });
+    // Run the profile's startup command once the shell has produced its first output (prompt ready).
+    if (!startupSent) {
+      startupSent = true;
+      try {
+        pty.write(`${startupCommand}\r`);
+      } catch {
+        /* shell already gone */
+      }
+    }
     session.sent += data.length;
     if (!session.paused && session.sent - session.acked > HIGH_WATER) {
       session.paused = true;

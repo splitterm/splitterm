@@ -2,7 +2,9 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { CONTROL_CHANNELS } from '@shared/ipc';
-import { startPtyHost, connectRendererPort, stopPtyHost } from './pty-supervisor';
+import type { Settings } from '@shared/domain/settings.schema';
+import { startPtyHost, connectRendererPort, stopPtyHost, syncUserProfiles } from './pty-supervisor';
+import { loadSettings, getSettings, setSettings, onSettingsChange } from './settings-store';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -49,11 +51,24 @@ const createWindow = (): void => {
   }
 };
 
-// Minimal control handlers. PTY + settings handlers land in M1/M3.
 ipcMain.handle(CONTROL_CHANNELS.appVersion, () => app.getVersion());
+ipcMain.handle(CONTROL_CHANNELS.settingsGet, () => getSettings());
+ipcMain.handle(CONTROL_CHANNELS.settingsSet, (_e, patch: Partial<Settings>) => {
+  setSettings(patch);
+});
 
-app.whenReady().then(() => {
+// On any settings change: push user profiles to the pty-host and broadcast to all renderers.
+onSettingsChange((settings) => {
+  syncUserProfiles(settings.profiles);
+  for (const w of BrowserWindow.getAllWindows()) {
+    w.webContents.send(CONTROL_CHANNELS.settingsChanged, settings);
+  }
+});
+
+app.whenReady().then(async () => {
   startPtyHost();
+  await loadSettings();
+  syncUserProfiles(getSettings().profiles);
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

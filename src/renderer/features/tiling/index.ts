@@ -23,7 +23,7 @@ const MIN_RATIO = 0.05;
 
 export interface Tiling {
   /** Add a terminal by splitting the largest pane (even tiling). */
-  addTerminal(profileId?: string): Promise<void>;
+  addTerminal(profileId?: string, title?: string): Promise<void>;
   /** Close the most-recently-created terminal (keeps at least one). */
   removeLast(): void;
   dispose(): void;
@@ -66,8 +66,8 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     });
   }
 
-  async function makeLeaf(profileId?: string): Promise<LeafNode> {
-    const { termId } = await createTerminal(profileId);
+  async function makeLeaf(profileId?: string, title?: string): Promise<LeafNode> {
+    const { termId } = await createTerminal(profileId, title);
     const node = leaf(`leaf-${++leafSeq}`, termId);
     order.push(node.id);
     return node;
@@ -138,6 +138,7 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     if (node.id === focusedLeafId) cell.classList.add(FOCUS_RING);
     const pane = getPane(node.termId);
     if (pane) cell.appendChild(pane.el);
+    if (pane?.title) cell.appendChild(makeTitleChip(pane.title));
     cell.addEventListener(
       'mousedown',
       () => focusLeaf(node.id),
@@ -146,6 +147,16 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     cell.appendChild(makeDragHandle(node.id));
     cell.appendChild(makeCloseButton(node.id));
     return cell;
+  }
+
+  function makeTitleChip(title: string): HTMLElement {
+    const el = document.createElement('div');
+    el.className =
+      'pane-title pointer-events-none absolute top-1 left-1/2 -translate-x-1/2 z-10 max-w-[60%] truncate ' +
+      'px-2 h-5 inline-flex items-center rounded-[var(--r-sm)] border border-[var(--border)] ' +
+      'bg-[var(--bg-surface)] text-[11px] text-[var(--text-secondary)] select-none';
+    el.textContent = title;
+    return el;
   }
 
   function makeDragHandle(leafId: string): HTMLElement {
@@ -285,10 +296,10 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     if (node) getPane(node.termId)?.focus();
   }
 
-  async function doSplit(targetId: string, dir: Dir, profileId?: string): Promise<void> {
+  async function doSplit(targetId: string, dir: Dir, profileId?: string, title?: string): Promise<void> {
     if (!root) return;
     maximizedId = null;
-    const node = await makeLeaf(profileId);
+    const node = await makeLeaf(profileId, title);
     // The target could have been closed while we awaited the spawn — drop the orphan if so.
     if (!root || !findLeaf(root, targetId)) {
       dropLeaf(node);
@@ -301,8 +312,8 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   // The first terminal (empty → one pane). Rendered DIRECTLY (no View Transition): a brand-new
   // xterm must size on attach, and wrapping that first render in a transition leaves it blank
   // until a later re-render. Drops itself if another add won the race.
-  async function createFirst(profileId?: string): Promise<void> {
-    const node = await makeLeaf(profileId);
+  async function createFirst(profileId?: string, title?: string): Promise<void> {
+    const node = await makeLeaf(profileId, title);
     if (root) {
       dropLeaf(node);
       return;
@@ -325,17 +336,17 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   // Button "+": open exactly one terminal. When empty, create the first; otherwise add evenly by
   // splitting the LARGEST pane along its longer axis (half/half, then stacked, then a grid). The
   // time guard collapses the duplicate click a frameless titlebar fires on first interaction.
-  async function addTerminal(profileId?: string): Promise<void> {
+  async function addTerminal(profileId?: string, title?: string): Promise<void> {
     const now = performance.now();
     if (now - lastAdd < 350) return;
     lastAdd = now;
     if (!root) {
-      await createFirst(profileId);
+      await createFirst(profileId, title);
       return;
     }
     const targetId = largestLeafId() ?? focusedLeafId;
     if (!targetId) return;
-    await doSplit(targetId, autoSplitDirFor(targetId), profileId);
+    await doSplit(targetId, autoSplitDirFor(targetId), profileId, title);
   }
 
   function closeById(leafId: string): void {

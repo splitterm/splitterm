@@ -2,6 +2,8 @@
 // the renderer (reads a snapshot). Persist only the diff vs DEFAULTS; deep-merge at load.
 // profiles + keybindings land in M3 — keep this lean for the scaffold.
 
+import type { UserProfile } from './profile';
+
 export type ThemeName = 'JetBrains Dark' | 'OLED Black' | 'Light' | (string & {});
 
 export interface Settings {
@@ -23,6 +25,8 @@ export interface Settings {
     cursorStyle: 'block' | 'bar' | 'underline';
     cursorBlink: boolean;
   };
+  /** user-defined launch profiles, shown in the new-terminal dropdown */
+  profiles: UserProfile[];
 }
 
 export const DEFAULTS: Settings = {
@@ -30,6 +34,7 @@ export const DEFAULTS: Settings = {
   appearance: { theme: 'JetBrains Dark', followOS: true, reduceMotion: false },
   font: { family: 'JetBrains Mono, Cascadia Code, ui-monospace, monospace', size: 13 },
   terminal: { scrollback: 1000, cursorStyle: 'block', cursorBlink: true },
+  profiles: [],
 };
 
 /**
