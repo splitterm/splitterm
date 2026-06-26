@@ -1,10 +1,12 @@
 import { app } from 'electron';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { DEFAULTS, type Settings } from '@shared/domain/settings.schema';
+import { DEFAULTS, normalize, type Settings } from '@shared/domain/settings.schema';
 
-// Single human-editable settings.json in userData. Read once on boot (deep-merged over DEFAULTS so
-// the file stays minimal and new defaults reach existing users), written atomically + debounced.
+// Single human-editable settings.json in userData. Read once on boot, written atomically + debounced.
+// The file is untrusted, so both reads (boot) and writes (renderer patches) pass through
+// normalize() — the single trust boundary that coerces/clamps every field and fills gaps from
+// DEFAULTS, so `current` is always a valid Settings no matter what's on disk or in a patch.
 let current: Settings = DEFAULTS;
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<(s: Settings) => void>();
@@ -27,7 +29,7 @@ function merge<T>(base: T, patch: unknown): T {
 
 export async function loadSettings(): Promise<Settings> {
   try {
-    current = merge(DEFAULTS, JSON.parse(await fs.readFile(filePath(), 'utf8')));
+    current = normalize(JSON.parse(await fs.readFile(filePath(), 'utf8')));
   } catch {
     current = DEFAULTS; // missing or corrupt → defaults
   }
@@ -39,7 +41,9 @@ export function getSettings(): Settings {
 }
 
 export function setSettings(patch: Partial<Settings>): Settings {
-  current = merge(current, patch);
+  // Deep-merge the partial patch, then re-normalize so a renderer-supplied value (e.g. a profile
+  // with a multi-line startupCommand) is clamped before it's persisted or synced to the host.
+  current = normalize(merge(current, patch));
   scheduleWrite();
   for (const cb of listeners) cb(current);
   return current;
