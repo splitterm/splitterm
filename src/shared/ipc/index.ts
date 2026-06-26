@@ -23,6 +23,8 @@ export interface SplittermApi {
     resize(req: ResizeRequest): Promise<void>;
     kill(req: KillRequest): Promise<void>;
     profiles(): Promise<ShellProfile[]>;
+    /** Subscribe to pty-host crashes; returns an unsubscribe fn. */
+    onHostCrashed(cb: () => void): () => void;
   };
   settings: SettingsApi;
   app: {

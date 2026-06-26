@@ -3,6 +3,7 @@
 // matter the output rate). Outgoing input/resize/ack go straight over the port.
 import type { TermId } from '@shared/ids';
 import type { HostToRenderer, RendererToHost } from '@shared/ipc';
+import { ipc } from './ipc-client';
 
 interface TerminalHandlers {
   onData: (data: string) => void;
@@ -14,6 +15,20 @@ const pending = new Map<number, string[]>();
 let port: MessagePort | null = null;
 let rafScheduled = false;
 
+const HOST_CRASH_BANNER = '\r\n\x1b[1;31m[pty-host crashed — this terminal ended. Open a new one.]\x1b[0m\r\n';
+
+/**
+ * The pty-host died, taking every live session with it. Show a banner on each registered terminal so
+ * panes don't silently freeze — the renderer stays up and new terminals work against the respawned
+ * host. The failed sessions are then dropped (their `onExit` will never arrive over the dead port),
+ * so a second crash only banners panes that are actually live, and stale handlers don't accumulate.
+ */
+function failAll(): void {
+  for (const handler of handlers.values()) handler.onData(HOST_CRASH_BANNER);
+  handlers.clear();
+  pending.clear();
+}
+
 /** Install the window listener that receives the port bridged from preload. Call once at boot. */
 export function initPortBridge(): void {
   window.addEventListener('message', (e: MessageEvent) => {
@@ -21,6 +36,7 @@ export function initPortBridge(): void {
     const incoming = e.ports[0];
     if (tagged && incoming) attachPort(incoming);
   });
+  ipc.pty.onHostCrashed(failAll);
 }
 
 function attachPort(p: MessagePort): void {
