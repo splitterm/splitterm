@@ -20,10 +20,13 @@ const HOST_CRASH_BANNER = '\r\n\x1b[1;31m[pty-host crashed — this terminal end
 /**
  * The pty-host died, taking every live session with it. Show a banner on each registered terminal so
  * panes don't silently freeze — the renderer stays up and new terminals work against the respawned
- * host. (Old TermIds are never reused, so leaving the handlers registered is harmless.)
+ * host. The failed sessions are then dropped (their `onExit` will never arrive over the dead port),
+ * so a second crash only banners panes that are actually live, and stale handlers don't accumulate.
  */
 function failAll(): void {
   for (const handler of handlers.values()) handler.onData(HOST_CRASH_BANNER);
+  handlers.clear();
+  pending.clear();
 }
 
 /** Install the window listener that receives the port bridged from preload. Call once at boot. */
