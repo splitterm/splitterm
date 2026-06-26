@@ -10,6 +10,8 @@ export const CONTROL_CHANNELS = {
   ptyProfiles: 'pty:profiles',
   /** main → renderer: hands over the MessagePort for a terminal's byte firehose */
   ptyPort: 'pty:port',
+  /** main → renderer: the pty-host crashed; every live session is gone (panes should show a banner) */
+  ptyHostCrashed: 'pty:host-crashed',
 
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',

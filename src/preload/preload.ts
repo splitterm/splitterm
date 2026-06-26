@@ -9,6 +9,11 @@ const api: SplittermApi = {
     resize: (req) => ipcRenderer.invoke(CONTROL_CHANNELS.ptyResize, req),
     kill: (req) => ipcRenderer.invoke(CONTROL_CHANNELS.ptyKill, req),
     profiles: () => ipcRenderer.invoke(CONTROL_CHANNELS.ptyProfiles),
+    onHostCrashed: (cb) => {
+      const listener = (): void => cb();
+      ipcRenderer.on(CONTROL_CHANNELS.ptyHostCrashed, listener);
+      return () => ipcRenderer.removeListener(CONTROL_CHANNELS.ptyHostCrashed, listener);
+    },
   },
   settings: {
     get: () => ipcRenderer.invoke(CONTROL_CHANNELS.settingsGet),
