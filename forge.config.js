@@ -19,6 +19,9 @@ module.exports = {
   // node-pty ships ABI-stable N-API prebuilds, so no native rebuild is needed (and this avoids
   // requiring a C++ build toolchain). Rebuild nothing.
   rebuildConfig: { onlyModules: [] },
+  // No Linux makers (deb/rpm): node-pty ships no Linux prebuild and native rebuild is disabled above,
+  // so a Linux package would install an app that can't spawn any shell. Re-add once Linux PTY support
+  // lands (a prebuild or an enabled rebuild).
   makers: [
     {
       name: '@electron-forge/maker-squirrel',
@@ -27,14 +30,6 @@ module.exports = {
     {
       name: '@electron-forge/maker-zip',
       platforms: ['darwin'],
-    },
-    {
-      name: '@electron-forge/maker-deb',
-      config: {},
-    },
-    {
-      name: '@electron-forge/maker-rpm',
-      config: {},
     },
   ],
   plugins: [
