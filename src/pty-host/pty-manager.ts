@@ -1,7 +1,7 @@
 import { spawn, type IPty } from 'node-pty';
 import fs from 'node:fs';
 import type { TermId } from '@shared/ids';
-import type { PortLike, SpawnRequest } from '@shared/ipc';
+import type { PortLike, SpawnRequest, HostToRenderer } from '@shared/ipc';
 import { homeDir, sanitizedEnv, type ResolvedShell } from './shell-detect';
 
 // Watermark flow control: pause node-pty when the renderer is behind, resume when it catches up.
@@ -18,6 +18,33 @@ interface Session {
 
 const sessions = new Map<number, Session>();
 
+// The renderer's firehose port lives here so every session posts to the *current* port and a
+// renderer reload (a new port) resets session state in exactly one place — sessions no longer
+// capture a port that goes stale on reload.
+let firehose: PortLike | null = null;
+
+export function hasFirehose(): boolean {
+  return firehose !== null;
+}
+
+/**
+ * Adopt the renderer's firehose port. A *different* port than before means the renderer reloaded:
+ * the previous page is gone, so its sessions are orphaned. With no session restore yet, kill them —
+ * leaking them piles up zombie shells, and a paused one would wedge forever (the fresh renderer
+ * never acks its TermIds). The first connect has no sessions, so this is a no-op there.
+ */
+export function rebindFirehose(port: PortLike): void {
+  if (firehose && firehose !== port) {
+    killAll();
+    firehose.close?.();
+  }
+  firehose = port;
+}
+
+function post(msg: HostToRenderer): void {
+  firehose?.postMessage(msg);
+}
+
 // A requested cwd that doesn't exist makes node-pty throw (or the shell die immediately). Validate
 // it and fall back to the home directory so a stale/garbage cwd can't break terminal startup.
 function resolveCwd(cwd: string | undefined): string {
@@ -31,13 +58,7 @@ function resolveCwd(cwd: string | undefined): string {
   return homeDir();
 }
 
-export function spawnPty(
-  id: TermId,
-  opts: SpawnRequest,
-  port: PortLike,
-  shell: ResolvedShell,
-  startupCommand?: string,
-): void {
+export function spawnPty(id: TermId, opts: SpawnRequest, shell: ResolvedShell, startupCommand?: string): void {
   let pty: IPty;
   try {
     pty = spawn(shell.file, shell.args, {
@@ -54,8 +75,8 @@ export function spawnPty(
     // Emit a banner + synthetic exit so the pane shows the failure and never wedges.
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[pty-host] spawn failed for ${shell.file}:`, message);
-    port.postMessage({ t: 'data', id, data: `\r\n\x1b[31mFailed to start shell (${shell.file}): ${message}\x1b[0m\r\n` });
-    port.postMessage({ t: 'exit', id, code: 1 });
+    post({ t: 'data', id, data: `\r\n\x1b[31mFailed to start shell (${shell.file}): ${message}\x1b[0m\r\n` });
+    post({ t: 'exit', id, code: 1 });
     return;
   }
 
@@ -64,7 +85,7 @@ export function spawnPty(
 
   let startupSent = !startupCommand;
   pty.onData((data) => {
-    port.postMessage({ t: 'data', id, data });
+    post({ t: 'data', id, data });
     // Run the profile's startup command once the shell has produced its first output (prompt ready).
     if (!startupSent) {
       startupSent = true;
@@ -82,7 +103,7 @@ export function spawnPty(
   });
 
   pty.onExit(({ exitCode, signal }) => {
-    port.postMessage({ t: 'exit', id, code: exitCode, signal });
+    post({ t: 'exit', id, code: exitCode, signal });
     sessions.delete(id);
   });
 }

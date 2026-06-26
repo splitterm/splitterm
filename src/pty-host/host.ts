@@ -3,7 +3,7 @@
 import type { TermId } from '@shared/ids';
 import type { PortLike, RendererToHost, SpawnRequest } from '@shared/ipc';
 import type { UserProfile } from '@shared/domain/profile';
-import { spawnPty, writePty, resizePty, ackPty, killPty, killAll } from './pty-manager';
+import { spawnPty, writePty, resizePty, ackPty, killPty, killAll, rebindFirehose, hasFirehose } from './pty-manager';
 import { resolveShell, detectProfiles, type ResolvedShell, type ShellProfileFull } from './shell-detect';
 
 interface ResolvedLaunch extends ResolvedShell {
@@ -29,7 +29,6 @@ const parentPort = (process as unknown as {
   };
 }).parentPort;
 
-let firehose: PortLike | null = null;
 let fullProfiles: ShellProfileFull[] = []; // detected shells (with file/args)
 let userProfiles: UserProfile[] = []; // user-defined profiles (synced from main/settings)
 // Spawns can arrive before the renderer's firehose port is connected; queue and drain on connect.
@@ -51,8 +50,8 @@ function resolveLaunch(profileId?: string): ResolvedLaunch {
   return resolveShell();
 }
 
-function launch(id: TermId, opts: SpawnRequest, port: PortLike, l: ResolvedLaunch): void {
-  spawnPty(id, opts, port, { file: l.file, args: l.args }, l.startupCommand);
+function launch(id: TermId, opts: SpawnRequest, l: ResolvedLaunch): void {
+  spawnPty(id, opts, { file: l.file, args: l.args }, l.startupCommand);
 }
 
 function onPortMessage(e: { data: unknown }): void {
@@ -76,17 +75,16 @@ parentPort?.on('message', (e) => {
     case 'connect': {
       const port = e.ports[0];
       if (!port) break;
-      firehose?.close?.();
-      firehose = port;
+      rebindFirehose(port); // adopt the new port; kills sessions orphaned by a renderer reload
       port.start?.();
       port.on?.('message', onPortMessage);
-      for (const s of pendingSpawns) launch(s.id, s.opts, port, s.launch);
+      for (const s of pendingSpawns) launch(s.id, s.opts, s.launch);
       pendingSpawns.length = 0;
       break;
     }
     case 'spawn': {
       const l = resolveLaunch(msg.opts.profileId);
-      if (firehose) launch(msg.id, msg.opts, firehose, l);
+      if (hasFirehose()) launch(msg.id, msg.opts, l);
       else pendingSpawns.push({ id: msg.id, opts: msg.opts, launch: l });
       break;
     }
