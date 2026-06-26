@@ -1,10 +1,12 @@
 import { app, BrowserWindow, ipcMain, type WebContents } from 'electron';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import started from 'electron-squirrel-startup';
 import { CONTROL_CHANNELS } from '@shared/ipc';
 import type { Settings } from '@shared/domain/settings.schema';
 import { startPtyHost, connectRendererPort, stopPtyHost, syncUserProfiles } from './pty-supervisor';
 import { loadSettings, getSettings, setSettings, onSettingsChange } from './settings-store';
+import { isAllowedNavigation } from './nav-guard';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -13,16 +15,11 @@ if (started) {
 
 const isMac = process.platform === 'darwin';
 
-// The only page the window should ever sit on: the dev server in dev, file:// in a packaged build.
+// The only page the window should ever sit on: the dev-server origin in dev, or exactly the
+// packaged index.html in prod (pinned to one file, not the whole file: scheme — see nav-guard).
 const DEV_ORIGIN = MAIN_WINDOW_VITE_DEV_SERVER_URL ? new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL).origin : null;
-const isAppUrl = (target: string): boolean => {
-  try {
-    const url = new URL(target);
-    return DEV_ORIGIN ? url.origin === DEV_ORIGIN : url.protocol === 'file:';
-  } catch {
-    return false;
-  }
-};
+const APP_FILE_URL = pathToFileURL(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)).href;
+const isAppUrl = (target: string): boolean => isAllowedNavigation(target, DEV_ORIGIN, APP_FILE_URL);
 
 // Navigation lockdown: this is a local app shell, never a browser. Deny every new-window/popup
 // request and block any top-level navigation away from the app's own page, so a malicious link or
