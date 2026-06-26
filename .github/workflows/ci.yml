@@ -11,9 +11,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: typecheck · lint · boundaries · tests
-    runs-on: ubuntu-latest
+  checks:
+    name: checks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,3 +28,19 @@ jobs:
       - run: npm ci
       - run: npm run verify
       - run: npm test
+
+  # End-to-end smoke of the built app via Playwright's Electron driver. Windows-only: node-pty has no
+  # Linux prebuild and the app targets Windows, so this is where a real launch + tiling + profiles run.
+  e2e:
+    name: e2e (windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run package
+      - run: npm run test:e2e
