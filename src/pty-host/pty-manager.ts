@@ -1,4 +1,5 @@
 import { spawn, type IPty } from 'node-pty';
+import fs from 'node:fs';
 import type { TermId } from '@shared/ids';
 import type { PortLike, SpawnRequest } from '@shared/ipc';
 import { homeDir, sanitizedEnv, type ResolvedShell } from './shell-detect';
@@ -17,6 +18,19 @@ interface Session {
 
 const sessions = new Map<number, Session>();
 
+// A requested cwd that doesn't exist makes node-pty throw (or the shell die immediately). Validate
+// it and fall back to the home directory so a stale/garbage cwd can't break terminal startup.
+function resolveCwd(cwd: string | undefined): string {
+  if (cwd) {
+    try {
+      if (fs.statSync(cwd).isDirectory()) return cwd;
+    } catch {
+      /* missing or inaccessible → fall back */
+    }
+  }
+  return homeDir();
+}
+
 export function spawnPty(
   id: TermId,
   opts: SpawnRequest,
@@ -24,14 +38,26 @@ export function spawnPty(
   shell: ResolvedShell,
   startupCommand?: string,
 ): void {
-  const pty = spawn(shell.file, shell.args, {
-    name: 'xterm-256color',
-    cols: opts.cols > 0 ? opts.cols : 80,
-    rows: opts.rows > 0 ? opts.rows : 24,
-    cwd: opts.cwd ?? homeDir(),
-    env: sanitizedEnv(),
-    useConpty: true,
-  });
+  let pty: IPty;
+  try {
+    pty = spawn(shell.file, shell.args, {
+      name: 'xterm-256color',
+      cols: opts.cols > 0 ? opts.cols : 80,
+      rows: opts.rows > 0 ? opts.rows : 24,
+      cwd: resolveCwd(opts.cwd),
+      env: sanitizedEnv(),
+      useConpty: true,
+    });
+  } catch (err) {
+    // A bad shell path/permissions throws synchronously (e.g. ENOENT). Without this the renderer's
+    // pane would hang blank forever (onExit never fires) and the throw could tear down the host.
+    // Emit a banner + synthetic exit so the pane shows the failure and never wedges.
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[pty-host] spawn failed for ${shell.file}:`, message);
+    port.postMessage({ t: 'data', id, data: `\r\n\x1b[31mFailed to start shell (${shell.file}): ${message}\x1b[0m\r\n` });
+    port.postMessage({ t: 'exit', id, code: 1 });
+    return;
+  }
 
   const session: Session = { pty, sent: 0, acked: 0, paused: false };
   sessions.set(id, session);
