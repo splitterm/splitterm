@@ -6,6 +6,8 @@ import type { TermId } from '@shared/ids';
 export interface PaneHandle {
   /** stable element the tiling engine re-parents between cells (never remounted) */
   el: HTMLElement;
+  /** display title for the pane (e.g. the launch profile name); '' = none */
+  title: string;
   focus(): void;
   fit(): void;
   dispose(): void;

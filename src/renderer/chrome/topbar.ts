@@ -7,7 +7,7 @@ import { createNewTerminalButton } from './new-terminal-button';
 export function createTopbar(opts: {
   onToggleSidebar: () => void;
   onNewTerminal: () => void;
-  onPickProfile: (profileId: string) => void;
+  onPickProfile: (profileId: string, label: string) => void;
   onRemoveTerminal: () => void;
 }): HTMLElement {
   const bar = document.createElement('header');

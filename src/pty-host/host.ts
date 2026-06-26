@@ -2,14 +2,20 @@
 // Receives a MessagePortMain (the firehose to the renderer) plus control messages from main.
 import type { TermId } from '@shared/ids';
 import type { PortLike, RendererToHost, SpawnRequest } from '@shared/ipc';
+import type { UserProfile } from '@shared/domain/profile';
 import { spawnPty, writePty, resizePty, ackPty, killPty, killAll } from './pty-manager';
 import { resolveShell, detectProfiles, type ResolvedShell, type ShellProfileFull } from './shell-detect';
+
+interface ResolvedLaunch extends ResolvedShell {
+  startupCommand?: string;
+}
 
 // Control messages main → host (over the utilityProcess parentPort).
 type HostControl =
   | { type: 'connect' }
   | { type: 'spawn'; id: TermId; opts: SpawnRequest }
-  | { type: 'kill'; id: TermId };
+  | { type: 'kill'; id: TermId }
+  | { type: 'user-profiles'; profiles: UserProfile[] };
 
 // `process.parentPort` is the Electron utilityProcess channel (not typed by @types/node).
 interface ParentPortEvent {
@@ -24,17 +30,29 @@ const parentPort = (process as unknown as {
 }).parentPort;
 
 let firehose: PortLike | null = null;
-let fullProfiles: ShellProfileFull[] = [];
+let fullProfiles: ShellProfileFull[] = []; // detected shells (with file/args)
+let userProfiles: UserProfile[] = []; // user-defined profiles (synced from main/settings)
 // Spawns can arrive before the renderer's firehose port is connected; queue and drain on connect.
-const pendingSpawns: Array<{ id: TermId; opts: SpawnRequest; shell: ResolvedShell }> = [];
+const pendingSpawns: Array<{ id: TermId; opts: SpawnRequest; launch: ResolvedLaunch }> = [];
 
-function resolveProfile(profileId?: string): ResolvedShell {
+// Resolve a profile id (a detected shell OR a user profile) to a launchable shell + startup command.
+function resolveLaunch(profileId?: string): ResolvedLaunch {
   if (profileId) {
-    const p = fullProfiles.find((x) => x.id === profileId);
-    if (p) return { file: p.file, args: p.args };
+    const detected = fullProfiles.find((x) => x.id === profileId);
+    if (detected) return { file: detected.file, args: detected.args };
+    const user = userProfiles.find((x) => x.id === profileId);
+    if (user) {
+      const base = fullProfiles.find((x) => x.id === user.baseShellId);
+      const shell = base ? { file: base.file, args: base.args } : resolveShell();
+      return { ...shell, startupCommand: user.startupCommand };
+    }
     console.warn(`[pty-host] unknown profile "${profileId}", using default shell`);
   }
   return resolveShell();
+}
+
+function launch(id: TermId, opts: SpawnRequest, port: PortLike, l: ResolvedLaunch): void {
+  spawnPty(id, opts, port, { file: l.file, args: l.args }, l.startupCommand);
 }
 
 function onPortMessage(e: { data: unknown }): void {
@@ -62,18 +80,21 @@ parentPort?.on('message', (e) => {
       firehose = port;
       port.start?.();
       port.on?.('message', onPortMessage);
-      for (const s of pendingSpawns) spawnPty(s.id, s.opts, port, s.shell);
+      for (const s of pendingSpawns) launch(s.id, s.opts, port, s.launch);
       pendingSpawns.length = 0;
       break;
     }
     case 'spawn': {
-      const shell = resolveProfile(msg.opts.profileId);
-      if (firehose) spawnPty(msg.id, msg.opts, firehose, shell);
-      else pendingSpawns.push({ id: msg.id, opts: msg.opts, shell });
+      const l = resolveLaunch(msg.opts.profileId);
+      if (firehose) launch(msg.id, msg.opts, firehose, l);
+      else pendingSpawns.push({ id: msg.id, opts: msg.opts, launch: l });
       break;
     }
     case 'kill':
       killPty(msg.id);
+      break;
+    case 'user-profiles':
+      userProfiles = msg.profiles;
       break;
   }
 });

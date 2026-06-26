@@ -11,7 +11,7 @@ const BTN =
 
 export function createNewTerminalButton(opts: {
   onNew: () => void;
-  onPick: (profileId: string) => void;
+  onPick: (profileId: string, label: string) => void;
   onRemove: () => void;
 }): HTMLElement {
   const group = document.createElement('div');
@@ -60,9 +60,16 @@ export function createNewTerminalButton(opts: {
     }
     if (opening) return; // a fetch is already in flight — avoid building two menus
     opening = true;
-    const profiles = await ipc.pty.profiles().catch(() => []);
+    const [detected, settings] = await Promise.all([
+      ipc.pty.profiles().catch(() => []),
+      ipc.settings.get().catch(() => null),
+    ]);
     opening = false;
     if (menu) return; // closed/reopened while fetching
+    const items: { id: string; label: string }[] = [
+      ...detected,
+      ...(settings?.profiles ?? []).map((p) => ({ id: p.id, label: p.name })),
+    ];
     menu = document.createElement('div');
     menu.className =
       'app-no-drag fixed z-50 min-w-[180px] py-1 rounded-[var(--r-md)] border border-[var(--border)] ' +
@@ -71,22 +78,22 @@ export function createNewTerminalButton(opts: {
     menu.style.left = `${rect.left}px`;
     menu.style.top = `${rect.bottom + 4}px`;
 
-    if (profiles.length === 0) {
+    if (items.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'px-3 py-1.5 text-[11px] text-[var(--text-disabled)]';
-      empty.textContent = 'No profiles found';
+      empty.textContent = 'No shells found';
       menu.appendChild(empty);
     } else {
-      for (const p of profiles) {
+      for (const it of items) {
         const item = document.createElement('button');
         item.type = 'button';
         item.className =
           'flex w-full items-center px-3 py-1.5 text-left text-[12px] cursor-pointer ' +
           'text-[var(--text-primary)] hover:bg-[var(--bg-hover)]';
-        item.textContent = p.label;
+        item.textContent = it.label;
         item.addEventListener('click', () => {
           closeMenu();
-          opts.onPick(p.id);
+          opts.onPick(it.id, it.label);
         });
         menu.appendChild(item);
       }
