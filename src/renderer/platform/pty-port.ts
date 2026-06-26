@@ -3,6 +3,7 @@
 // matter the output rate). Outgoing input/resize/ack go straight over the port.
 import type { TermId } from '@shared/ids';
 import type { HostToRenderer, RendererToHost } from '@shared/ipc';
+import { parseHostToRenderer } from '@shared/ipc';
 import { ipc } from './ipc-client';
 
 interface TerminalHandlers {
@@ -42,7 +43,10 @@ export function initPortBridge(): void {
 function attachPort(p: MessagePort): void {
   port?.close(); // release a stale port on reconnect (dev reload)
   port = p;
-  p.onmessage = (e: MessageEvent) => onMessage(e.data as HostToRenderer);
+  p.onmessage = (e: MessageEvent) => {
+    const msg = parseHostToRenderer(e.data);
+    if (msg) onMessage(msg);
+  };
   p.start();
 }
 

@@ -4,7 +4,7 @@ export * from './control.contract';
 export * from './port.protocol';
 export * from './settings.contract';
 
-import type { SpawnRequest, SpawnResponse, ResizeRequest, KillRequest } from './control.contract';
+import type { SpawnRequest, SpawnResponse, KillRequest } from './control.contract';
 import type { SettingsApi } from './settings.contract';
 import type { ShellProfile } from '../domain/profile';
 
@@ -20,7 +20,6 @@ export type { ShellProfile } from '../domain/profile';
 export interface SplittermApi {
   pty: {
     spawn(req: SpawnRequest): Promise<SpawnResponse>;
-    resize(req: ResizeRequest): Promise<void>;
     kill(req: KillRequest): Promise<void>;
     profiles(): Promise<ShellProfile[]>;
     /** Subscribe to pty-host crashes; returns an unsubscribe fn. */

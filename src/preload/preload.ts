@@ -6,7 +6,6 @@ import { CONTROL_CHANNELS, type SplittermApi } from '@shared/ipc';
 const api: SplittermApi = {
   pty: {
     spawn: (req) => ipcRenderer.invoke(CONTROL_CHANNELS.ptySpawn, req),
-    resize: (req) => ipcRenderer.invoke(CONTROL_CHANNELS.ptyResize, req),
     kill: (req) => ipcRenderer.invoke(CONTROL_CHANNELS.ptyKill, req),
     profiles: () => ipcRenderer.invoke(CONTROL_CHANNELS.ptyProfiles),
     onHostCrashed: (cb) => {

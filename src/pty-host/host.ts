@@ -1,7 +1,8 @@
 // PTY-host utilityProcess entry — one process hosting ALL node-pty shells, keyed by TermId.
 // Receives a MessagePortMain (the firehose to the renderer) plus control messages from main.
 import type { TermId } from '@shared/ids';
-import type { PortLike, RendererToHost, SpawnRequest } from '@shared/ipc';
+import type { PortLike, SpawnRequest } from '@shared/ipc';
+import { parseRendererToHost } from '@shared/ipc';
 import type { UserProfile } from '@shared/domain/profile';
 import { spawnPty, writePty, resizePty, ackPty, killPty, killAll, rebindFirehose, hasFirehose } from './pty-manager';
 import { resolveShell, detectProfiles, type ResolvedShell, type ShellProfileFull } from './shell-detect';
@@ -55,7 +56,10 @@ function launch(id: TermId, opts: SpawnRequest, l: ResolvedLaunch): void {
 }
 
 function onPortMessage(e: { data: unknown }): void {
-  const msg = e.data as RendererToHost;
+  // The firehose carries renderer-supplied messages; validate before touching node-pty so a
+  // malformed (or hostile) message is dropped instead of crashing the host.
+  const msg = parseRendererToHost(e.data);
+  if (!msg) return;
   switch (msg.t) {
     case 'write':
       writePty(msg.id, msg.data);

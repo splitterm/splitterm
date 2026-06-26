@@ -14,12 +14,6 @@ export interface SpawnResponse {
   id: TermId;
 }
 
-export interface ResizeRequest {
-  id: TermId;
-  cols: number;
-  rows: number;
-}
-
 export interface KillRequest {
   id: TermId;
 }
