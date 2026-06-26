@@ -100,9 +100,9 @@ ipcMain.handle(CONTROL_CHANNELS.settingsSet, (_e, patch: Partial<Settings>) => {
   setSettings(patch);
 });
 
-// On any settings change: push user profiles to the pty-host and broadcast to all renderers.
+// On any settings change: push user profiles + default to the pty-host and broadcast to all renderers.
 onSettingsChange((settings) => {
-  syncUserProfiles(settings.profiles);
+  syncUserProfiles(settings.profiles, settings.defaultProfileId);
   for (const w of BrowserWindow.getAllWindows()) {
     w.webContents.send(CONTROL_CHANNELS.settingsChanged, settings);
   }
@@ -113,7 +113,7 @@ app.whenReady().then(async () => {
   applyCspHeaders();
   startPtyHost();
   await loadSettings();
-  syncUserProfiles(getSettings().profiles);
+  syncUserProfiles(getSettings().profiles, getSettings().defaultProfileId);
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

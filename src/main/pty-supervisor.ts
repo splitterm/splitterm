@@ -10,6 +10,7 @@ let shuttingDown = false;
 let nextId = 1;
 let profiles: ShellProfile[] = [];
 let userProfiles: UserProfile[] = [];
+let defaultProfileId = ''; // synced to the host so the "+" button (no explicit profile) opens it
 
 // Crash-loop guard: cap how many times we respawn a host that keeps dying right after it starts, so
 // a host that crashes on boot doesn't spin forever. Surviving HEALTHY_MS resets the counter.
@@ -43,7 +44,7 @@ function forkHost(isRespawn: boolean): void {
 
   host.on('spawn', () => {
     hostReady = true;
-    host?.postMessage({ type: 'user-profiles', profiles: userProfiles }); // (re)seed on spawn
+    host?.postMessage({ type: 'user-profiles', profiles: userProfiles, defaultProfileId }); // (re)seed on spawn
     for (const s of pendingSpawns) host?.postMessage({ type: 'spawn', id: s.id, opts: s.opts });
     pendingSpawns.length = 0;
     // On a respawn the renderer's old firehose died with the host — re-broker a fresh one to each
@@ -124,9 +125,10 @@ export function connectRendererPort(win: BrowserWindow): void {
   else host?.once('spawn', wire);
 }
 
-export function syncUserProfiles(list: UserProfile[]): void {
+export function syncUserProfiles(list: UserProfile[], defaultId: string): void {
   userProfiles = list;
-  host?.postMessage({ type: 'user-profiles', profiles: list });
+  defaultProfileId = defaultId;
+  host?.postMessage({ type: 'user-profiles', profiles: list, defaultProfileId });
 }
 
 export function stopPtyHost(): void {

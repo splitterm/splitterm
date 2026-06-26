@@ -27,6 +27,8 @@ export interface Settings {
   };
   /** user-defined launch profiles, shown in the new-terminal dropdown */
   profiles: UserProfile[];
+  /** id of the profile the "+" button opens (detected shell or user profile); '' = OS default shell */
+  defaultProfileId: string;
 }
 
 export const DEFAULTS: Settings = {
@@ -35,6 +37,7 @@ export const DEFAULTS: Settings = {
   font: { family: 'JetBrains Mono, Cascadia Code, ui-monospace, monospace', size: 13 },
   terminal: { scrollback: 1000, cursorStyle: 'block', cursorBlink: true },
   profiles: [],
+  defaultProfileId: '',
 };
 
 // Clamp ranges for numeric fields. Bounds are defensive — wide enough to honor any sane user value,
@@ -116,5 +119,8 @@ export function normalize(input: unknown): Settings {
     profiles: Array.isArray(root.profiles)
       ? root.profiles.map(normalizeProfile).filter((p): p is UserProfile => p !== null)
       : [],
+    // '' = no default (OS shell). Stored as-is (cross-checked against live profiles at launch time),
+    // bounded so a garbage value can't bloat the file.
+    defaultProfileId: typeof root.defaultProfileId === 'string' ? root.defaultProfileId.slice(0, 200) : '',
   };
 }

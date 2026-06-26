@@ -16,7 +16,7 @@ type HostControl =
   | { type: 'connect' }
   | { type: 'spawn'; id: TermId; opts: SpawnRequest }
   | { type: 'kill'; id: TermId }
-  | { type: 'user-profiles'; profiles: UserProfile[] };
+  | { type: 'user-profiles'; profiles: UserProfile[]; defaultProfileId: string };
 
 // `process.parentPort` is the Electron utilityProcess channel (not typed by @types/node).
 interface ParentPortEvent {
@@ -32,21 +32,24 @@ const parentPort = (process as unknown as {
 
 let fullProfiles: ShellProfileFull[] = []; // detected shells (with file/args)
 let userProfiles: UserProfile[] = []; // user-defined profiles (synced from main/settings)
+let defaultProfileId = ''; // the profile the "+" button opens (no explicit profileId); '' = OS shell
 // Spawns can arrive before the renderer's firehose port is connected; queue and drain on connect.
 const pendingSpawns: Array<{ id: TermId; opts: SpawnRequest; launch: ResolvedLaunch }> = [];
 
 // Resolve a profile id (a detected shell OR a user profile) to a launchable shell + startup command.
+// With no explicit id (the "+" button), fall back to the configured default profile, then the OS shell.
 function resolveLaunch(profileId?: string): ResolvedLaunch {
-  if (profileId) {
-    const detected = fullProfiles.find((x) => x.id === profileId);
+  const effective = profileId || defaultProfileId;
+  if (effective) {
+    const detected = fullProfiles.find((x) => x.id === effective);
     if (detected) return { file: detected.file, args: detected.args };
-    const user = userProfiles.find((x) => x.id === profileId);
+    const user = userProfiles.find((x) => x.id === effective);
     if (user) {
       const base = fullProfiles.find((x) => x.id === user.baseShellId);
       const shell = base ? { file: base.file, args: base.args } : resolveShell();
       return { ...shell, startupCommand: user.startupCommand };
     }
-    console.warn(`[pty-host] unknown profile "${profileId}", using default shell`);
+    console.warn(`[pty-host] unknown profile "${effective}", using default shell`);
   }
   return resolveShell();
 }
@@ -97,6 +100,7 @@ parentPort?.on('message', (e) => {
       break;
     case 'user-profiles':
       userProfiles = msg.profiles;
+      defaultProfileId = msg.defaultProfileId;
       break;
   }
 });

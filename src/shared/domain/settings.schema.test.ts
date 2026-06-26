@@ -42,8 +42,18 @@ describe('normalize', () => {
       font: { family: 'Fira Code', size: 16 },
       terminal: { scrollback: 5000, cursorStyle: 'bar' as const, cursorBlink: false },
       profiles: [{ id: 'p1', name: 'Claude', baseShellId: 'pwsh', startupCommand: 'claude' }],
+      defaultProfileId: 'p1',
     };
     expect(normalize(valid)).toEqual(valid);
+  });
+
+  describe('defaultProfileId', () => {
+    it('defaults to empty string', () => expect(normalize({}).defaultProfileId).toBe(''));
+    it('keeps a string id', () => expect(normalize({ defaultProfileId: 'pwsh' }).defaultProfileId).toBe('pwsh'));
+    it.each([42, null, {}, ['x']])('falls back to "" for non-string %p', (defaultProfileId) =>
+      expect(normalize({ defaultProfileId }).defaultProfileId).toBe(''));
+    it('bounds the length', () =>
+      expect(normalize({ defaultProfileId: 'x'.repeat(500) }).defaultProfileId).toHaveLength(200));
   });
 
   it('is idempotent', () => {
@@ -63,7 +73,14 @@ describe('normalize', () => {
     >;
     expect(s.malicious).toBeUndefined();
     expect(s.extra).toBeUndefined();
-    expect(Object.keys(s).sort()).toEqual(['appearance', 'font', 'profiles', 'schemaVersion', 'terminal']);
+    expect(Object.keys(s).sort()).toEqual([
+      'appearance',
+      'defaultProfileId',
+      'font',
+      'profiles',
+      'schemaVersion',
+      'terminal',
+    ]);
   });
 
   describe('font.size', () => {
