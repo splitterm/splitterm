@@ -91,6 +91,9 @@ typings/
 # Electron-Forge
 out/
 
+# E2E failure screenshots written by scripts/verify-*.mjs
+scripts/*-fail.png
+
 # Local planning notes (not tracked)
 plans/
 
