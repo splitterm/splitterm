@@ -5,11 +5,8 @@ import type { PortLike, SpawnRequest } from '@shared/ipc';
 import { parseRendererToHost } from '@shared/ipc';
 import type { UserProfile } from '@shared/domain/profile';
 import { spawnPty, writePty, resizePty, ackPty, killPty, killAll, rebindFirehose, hasFirehose } from './pty-manager';
-import { resolveShell, detectProfiles, type ResolvedShell, type ShellProfileFull } from './shell-detect';
-
-interface ResolvedLaunch extends ResolvedShell {
-  startupCommand?: string;
-}
+import { resolveShell, detectProfiles, type ShellProfileFull } from './shell-detect';
+import { resolveLaunch, type ResolvedLaunch } from './resolve-launch';
 
 // Control messages main → host (over the utilityProcess parentPort).
 type HostControl =
@@ -35,24 +32,6 @@ let userProfiles: UserProfile[] = []; // user-defined profiles (synced from main
 let defaultProfileId = ''; // the profile the "+" button opens (no explicit profileId); '' = OS shell
 // Spawns can arrive before the renderer's firehose port is connected; queue and drain on connect.
 const pendingSpawns: Array<{ id: TermId; opts: SpawnRequest; launch: ResolvedLaunch }> = [];
-
-// Resolve a profile id (a detected shell OR a user profile) to a launchable shell + startup command.
-// With no explicit id (the "+" button), fall back to the configured default profile, then the OS shell.
-function resolveLaunch(profileId?: string): ResolvedLaunch {
-  const effective = profileId || defaultProfileId;
-  if (effective) {
-    const detected = fullProfiles.find((x) => x.id === effective);
-    if (detected) return { file: detected.file, args: detected.args };
-    const user = userProfiles.find((x) => x.id === effective);
-    if (user) {
-      const base = fullProfiles.find((x) => x.id === user.baseShellId);
-      const shell = base ? { file: base.file, args: base.args } : resolveShell();
-      return { ...shell, startupCommand: user.startupCommand };
-    }
-    console.warn(`[pty-host] unknown profile "${effective}", using default shell`);
-  }
-  return resolveShell();
-}
 
 function launch(id: TermId, opts: SpawnRequest, l: ResolvedLaunch): void {
   spawnPty(id, opts, { file: l.file, args: l.args }, l.startupCommand);
@@ -90,7 +69,7 @@ parentPort?.on('message', (e) => {
       break;
     }
     case 'spawn': {
-      const l = resolveLaunch(msg.opts.profileId);
+      const l = resolveLaunch(msg.opts.profileId, fullProfiles, userProfiles, defaultProfileId, resolveShell);
       if (hasFirehose()) launch(msg.id, msg.opts, l);
       else pendingSpawns.push({ id: msg.id, opts: msg.opts, launch: l });
       break;
