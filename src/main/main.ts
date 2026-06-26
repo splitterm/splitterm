@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, type WebContents } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { CONTROL_CHANNELS } from '@shared/ipc';
@@ -12,6 +12,30 @@ if (started) {
 }
 
 const isMac = process.platform === 'darwin';
+
+// The only page the window should ever sit on: the dev server in dev, file:// in a packaged build.
+const DEV_ORIGIN = MAIN_WINDOW_VITE_DEV_SERVER_URL ? new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL).origin : null;
+const isAppUrl = (target: string): boolean => {
+  try {
+    const url = new URL(target);
+    return DEV_ORIGIN ? url.origin === DEV_ORIGIN : url.protocol === 'file:';
+  } catch {
+    return false;
+  }
+};
+
+// Navigation lockdown: this is a local app shell, never a browser. Deny every new-window/popup
+// request and block any top-level navigation away from the app's own page, so a malicious link or
+// injected script can't turn the window into an arbitrary web view. (Electron security checklist.)
+const lockNavigation = (contents: WebContents): void => {
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  contents.on('will-navigate', (e, url) => {
+    if (!isAppUrl(url)) e.preventDefault();
+  });
+  contents.on('will-redirect', (e, url) => {
+    if (!isAppUrl(url)) e.preventDefault();
+  });
+};
 
 const createWindow = (): void => {
   const win = new BrowserWindow({
@@ -36,6 +60,8 @@ const createWindow = (): void => {
   });
 
   win.once('ready-to-show', () => win.show());
+
+  lockNavigation(win.webContents);
 
   // Hand the renderer its end of the PTY firehose once the page has loaded.
   win.webContents.on('did-finish-load', () => connectRendererPort(win));
