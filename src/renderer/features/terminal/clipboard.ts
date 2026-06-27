@@ -19,7 +19,7 @@ export interface TerminalClipboard {
 
 export function createTerminalClipboard(term: Terminal, el: HTMLElement): TerminalClipboard {
   async function copy(): Promise<void> {
-    if (term.hasSelection()) await ipc.clipboard.writeText(term.getSelection());
+    if (term.hasSelection()) await ipc.clipboard.writeText(term.getSelection()).catch(() => {});
   }
   async function paste(): Promise<void> {
     const text = await ipc.clipboard.readText().catch(() => '');
@@ -65,9 +65,11 @@ export function createTerminalClipboard(term: Terminal, el: HTMLElement): Termin
       const span = document.createElement('span');
       span.textContent = label;
       b.append(span);
+      b.addEventListener('mousedown', (e) => e.preventDefault()); // don't blur the terminal
       b.addEventListener('click', () => {
         closeMenu();
         onClick();
+        term.focus(); // keep keyboard focus on the terminal after the action
       });
       return b;
     };
@@ -91,6 +93,8 @@ export function createTerminalClipboard(term: Terminal, el: HTMLElement): Termin
   }
 
   const onContextMenu = (e: MouseEvent): void => {
+    // Don't hijack right-click inside the search overlay — let its input keep its native menu.
+    if ((e.target as HTMLElement | null)?.closest('.term-search')) return;
     e.preventDefault();
     openMenu(e.clientX, e.clientY);
   };
@@ -116,6 +120,12 @@ export function createTerminalClipboard(term: Terminal, el: HTMLElement): Termin
     }
     // Paste
     if (mod && e.shiftKey && e.code === 'KeyV') {
+      void paste();
+      return true;
+    }
+    // Plain Cmd+V on macOS (where Cmd isn't a control char, so the readline-conflict rationale for
+    // leaving plain Ctrl+V to the shell doesn't apply). Gated on metaKey, so Windows Ctrl+V is untouched.
+    if (e.metaKey && !e.ctrlKey && !e.shiftKey && e.code === 'KeyV') {
       void paste();
       return true;
     }

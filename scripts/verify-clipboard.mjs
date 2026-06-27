@@ -75,9 +75,7 @@ try {
     .catch(() => []);
   await win.locator('.term-context-menu').getByText('Select all').click();
   await sleep(200);
-  // Focus the xterm textarea without clicking (a click would clear the selection), then copy.
-  await win.evaluate(() => document.querySelector('.xterm-helper-textarea')?.focus());
-  await sleep(100);
+  // No manual refocus: the menu action must leave the terminal focused, so the keyboard copy works.
   await win.keyboard.press('Control+Shift+C');
   await sleep(300);
   const clipAfterCopy = await app.evaluate(({ clipboard }) => clipboard.readText());
