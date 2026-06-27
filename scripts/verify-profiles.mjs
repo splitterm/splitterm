@@ -1,6 +1,7 @@
-// Runtime verification of custom profiles. Launches the built app with an isolated userData dir,
-// creates a profile in the sidebar (base shell + startup command), then confirms it shows in the
-// new-terminal dropdown, spawns with the right title, and actually runs the startup command.
+// Runtime verification of custom profiles via the settings modal. Launches the built app with an
+// isolated userData dir, creates a "Claude" profile in Settings → Profiles (base shell + startup
+// command), then confirms it shows in the new-terminal dropdown, spawns with the right title, and
+// actually runs the startup command.
 import { _electron as electron } from 'playwright-core';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -10,7 +11,7 @@ import { rmSync } from 'node:fs';
 const require = createRequire(import.meta.url);
 const electronPath = require('electron');
 const mainJs = path.resolve('.vite/build/main.js');
-const userDataDir = path.join(os.tmpdir(), 'splitterm-e2e-userdata');
+const userDataDir = path.join(os.tmpdir(), 'splitterm-e2e-profiles');
 rmSync(userDataDir, { recursive: true, force: true });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -41,22 +42,24 @@ try {
     await finish(1);
   }
 
-  // 1) Open the sidebar and create a "Claude" profile (echo so we can see the command run).
-  await win.getByRole('button', { name: 'Toggle sidebar' }).click();
-  await sleep(400);
-  await win.locator('input[placeholder^="Name"]').fill('Claude');
-  const shellSel = win.locator('select');
+  // 1) Open Settings → Profiles and create a "Claude" profile (echo so we can see the command run).
+  await win.getByRole('button', { name: 'Open settings' }).click();
+  await sleep(300);
+  await win.locator('.settings-dialog button[data-category="profiles"]').click();
+  await sleep(300);
+  await win.locator('.settings-dialog input[placeholder^="Name"]').fill('Claude');
+  const shellSel = win.locator('.settings-dialog select');
   const optionValues = await shellSel.locator('option').evaluateAll((os2) => os2.map((o) => o.value));
   result.shellOptions = optionValues;
   if (optionValues[0]) await shellSel.selectOption(optionValues[0]);
-  await win.locator('input[placeholder^="Startup"]').fill('echo splitterm-marker');
+  await win.locator('.settings-dialog input[placeholder^="Startup"]').fill('echo splitterm-marker');
   await win.getByRole('button', { name: 'Add profile' }).click();
-  await sleep(600);
-  result.profileListedInSidebar = (await win.locator('.sidebar-inner').getByText('Claude', { exact: true }).count()) > 0;
+  await sleep(500);
+  result.profileListedInModal = (await win.locator('.settings-dialog').getByText('Claude', { exact: true }).count()) > 0;
 
-  // Close the sidebar so its push layout can't intercept the dropdown.
-  await win.getByRole('button', { name: 'Toggle sidebar' }).click();
-  await sleep(400);
+  // Close the modal (Escape).
+  await win.keyboard.press('Escape');
+  await sleep(300);
 
   // 2) Open the ▾ dropdown and confirm the profile is listed.
   await win.getByRole('button', { name: 'Choose terminal profile' }).click();
@@ -79,7 +82,7 @@ try {
       await sleep(300);
     }
     result.commandRan = /splitterm-marker/.test(rowsText);
-    result.rowsSample = rowsText.slice(0, 400);
+    result.rowsSample = rowsText.slice(0, 300);
   }
 
   await finish(0);

@@ -125,6 +125,38 @@ body.pane-dragging * {
   }
 }
 
+/* In-app "reduce motion" toggle: mirror the OS setting by zeroing the motion tokens, so every
+   transition/animation that reads them collapses to instant. */
+html[data-reduce-motion='true'] {
+  --motion-instant: 0ms;
+  --motion-fast: 0ms;
+  --motion-base: 0ms;
+  --motion-slow: 0ms;
+}
+
+/* Settings modal: a centered dialog over a dimming backdrop. Shown by toggling `.open`; the
+   compositor-only fade + lift keep it smooth (and collapse to instant under reduce-motion). */
+.settings-overlay {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--motion-fast) var(--ease-out),
+    visibility 0s linear var(--motion-fast);
+}
+.settings-overlay.open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+.settings-dialog {
+  transform: translateY(8px) scale(0.985);
+  transition: transform var(--motion-base) var(--ease-out);
+  will-change: transform;
+}
+.settings-overlay.open .settings-dialog {
+  transform: none;
+}
+
 /* Status bar */
 .statusbar {
   display: flex;
