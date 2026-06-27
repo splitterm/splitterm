@@ -126,6 +126,9 @@ app.whenReady().then(async () => {
   applyCspHeaders();
   startPtyHost();
   await loadSettings();
+  // Load the saved session into `current` at boot so the quit-flush never writes a stale empty
+  // session over the real layout — e.g. when restore is off and the renderer never requests it.
+  await loadSession();
   syncUserProfiles(getSettings().profiles, getSettings().defaultProfileId);
   createWindow();
   app.on('activate', () => {

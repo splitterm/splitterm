@@ -95,12 +95,21 @@ initSettings()
     tiling.onChange((list) => sidebar.setSessions(list));
 
     // Restore the previous layout (fresh shells in the saved cwds/profiles) before subscribing the
-    // save, so the restore isn't immediately persisted back over itself. Gated on the user setting.
+    // save, so the restore isn't immediately persisted back over itself. The setting gates the WHOLE
+    // feature: when off we neither restore nor save, so the last-saved layout is preserved (frozen).
     if (getSettings().restoreSession) {
       const saved = await ipc.session.get().catch(() => null);
       if (saved?.root) await t.restore(saved);
     }
 
+    // Persist on change/unload, but never let a restore-off or empty session overwrite the saved
+    // layout: skip the save while restore is off (frozen), and skip an empty (root === null) snapshot
+    // so closing all panes / toggling restore on while empty can't clobber the stored layout.
+    const persist = (): void => {
+      if (!getSettings().restoreSession) return;
+      const session = t.serialize();
+      if (session.root) ipc.session.save(session);
+    };
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
     let primed = false; // onChange fires once synchronously on subscribe — skip that initial no-op save
     const scheduleSave = (): void => {
@@ -109,11 +118,10 @@ initSettings()
         return;
       }
       clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => ipc.session.save(t.serialize()), 400);
+      saveTimer = setTimeout(persist, 400);
     };
     tiling.onChange(scheduleSave);
-    // Final save on unload (close/reload) captures the latest cwds before the page goes away.
-    window.addEventListener('pagehide', () => ipc.session.save(t.serialize()));
+    window.addEventListener('pagehide', persist); // final save on unload (close/reload)
 
     const status = document.getElementById('shell-status');
     if (status) status.textContent = 'ready';
