@@ -102,8 +102,8 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     });
   }
 
-  async function makeLeaf(profileId?: string, title?: string): Promise<LeafNode> {
-    const { termId } = await createTerminal(profileId, title);
+  async function makeLeaf(profileId?: string, title?: string, cwd?: string): Promise<LeafNode> {
+    const { termId } = await createTerminal(profileId, title, cwd);
     const node = leaf(`leaf-${++leafSeq}`, termId);
     order.push(node.id);
     return node;
@@ -336,10 +336,10 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     emit(); // focus changed — refresh the Sessions highlight
   }
 
-  async function doSplit(targetId: string, dir: Dir, profileId?: string, title?: string): Promise<void> {
+  async function doSplit(targetId: string, dir: Dir, profileId?: string, title?: string, cwd?: string): Promise<void> {
     if (!root) return;
     maximizedId = null;
-    const node = await makeLeaf(profileId, title);
+    const node = await makeLeaf(profileId, title, cwd);
     // The target could have been closed while we awaited the spawn — drop the orphan if so.
     if (!root || !findLeaf(root, targetId)) {
       dropLeaf(node);
@@ -364,13 +364,17 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     focusLeaf(node.id);
   }
 
-  // Keyboard split: split the FOCUSED pane (or open the first terminal when empty).
+  // Keyboard split: split the FOCUSED pane (or open the first terminal when empty). The new pane
+  // inherits the focused pane's cwd (from its OSC 7 reports), so the split opens in the same place.
   function splitActive(dir: Dir): void {
     if (!root) {
       void addTerminal();
       return;
     }
-    if (focusedLeafId) void doSplit(focusedLeafId, dir);
+    if (!focusedLeafId) return;
+    const lf = findLeaf(root, focusedLeafId);
+    const cwd = lf ? getPane(lf.termId)?.cwd() : undefined;
+    void doSplit(focusedLeafId, dir, undefined, undefined, cwd);
   }
 
   // Button "+": open exactly one terminal. When empty, create the first; otherwise add evenly by

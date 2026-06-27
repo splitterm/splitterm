@@ -11,6 +11,8 @@ export interface PaneHandle {
   title: string;
   focus(): void;
   fit(): void;
+  /** the latest working directory the shell reported (OSC 7); undefined if never reported */
+  cwd(): string | undefined;
   /** re-apply live settings (font / cursor / scrollback + theme) to the terminal */
   applySettings(settings: Settings): void;
   dispose(): void;

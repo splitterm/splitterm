@@ -9,6 +9,7 @@ import { getSettings } from '@platform/settings-controller';
 import { readTerminalTheme } from './theme';
 import { createTerminalSearch } from './search';
 import { createTerminalClipboard } from './clipboard';
+import { parseOsc7 } from './osc7';
 
 export interface TerminalInstance {
   termId: TermId;
@@ -21,9 +22,13 @@ export interface TerminalInstance {
  * The element starts detached; the tiling engine appends it to a cell, at which point the
  * ResizeObserver fits it to the real size. M2 uses the DOM renderer; WebGL pooling lands in M2b.
  */
-export async function createTerminal(profileId?: string, title = ''): Promise<TerminalInstance> {
+export async function createTerminal(profileId?: string, title = '', initialCwd?: string): Promise<TerminalInstance> {
   const el = document.createElement('div');
   el.className = 'term-pane';
+
+  // Working directory: the spawn cwd, then kept current from the shell's OSC 7 reports. A split reads
+  // this (PaneHandle.cwd) so the new pane opens where the focused pane is.
+  let cwd = initialCwd;
 
   const s = getSettings();
   const term = new Terminal({
@@ -38,6 +43,13 @@ export async function createTerminal(profileId?: string, title = ''): Promise<Te
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(el);
+
+  // Track the cwd the shell reports via OSC 7 (`ESC ]7;file://host/path BEL`).
+  const osc7 = term.parser.registerOscHandler(7, (data) => {
+    const dir = parseOsc7(data);
+    if (dir) cwd = dir;
+    return true;
+  });
 
   // Search + copy/paste, owned by this pane. Both are intercepted at the xterm level so they never
   // reach the shell and always target the focused pane. One custom handler routes the keys.
@@ -59,7 +71,7 @@ export async function createTerminal(profileId?: string, title = ''): Promise<Te
     return true;
   });
 
-  const { id } = await ipc.pty.spawn({ cols: term.cols || 80, rows: term.rows || 24, profileId });
+  const { id } = await ipc.pty.spawn({ cols: term.cols || 80, rows: term.rows || 24, profileId, cwd });
 
   registerTerminal(
     id,
@@ -91,6 +103,7 @@ export async function createTerminal(profileId?: string, title = ''): Promise<Te
     title,
     focus: () => term.focus(),
     fit: refit,
+    cwd: () => cwd,
     applySettings: (next) => {
       term.options.fontFamily = next.font.family;
       term.options.fontSize = next.font.size;
@@ -103,6 +116,7 @@ export async function createTerminal(profileId?: string, title = ''): Promise<Te
     },
     dispose: () => {
       observer.disconnect();
+      osc7.dispose();
       search.dispose();
       clip.dispose();
       unregisterTerminal(id);
