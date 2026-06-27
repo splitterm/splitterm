@@ -370,7 +370,8 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   }
 
   // Keyboard split: split the FOCUSED pane (or open the first terminal when empty). The new pane
-  // inherits the focused pane's cwd (from its OSC 7 reports), so the split opens in the same place.
+  // duplicates the focused pane's launch context — same profile (re-running its startup command),
+  // same title, and same cwd (from its OSC 7 reports) — so splitting a "Claude" pane gives another.
   function splitActive(dir: Dir): void {
     if (!root) {
       void addTerminal();
@@ -378,8 +379,8 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     }
     if (!focusedLeafId) return;
     const lf = findLeaf(root, focusedLeafId);
-    const cwd = lf ? getPane(lf.termId)?.cwd() : undefined;
-    void doSplit(focusedLeafId, dir, undefined, undefined, cwd);
+    const pane = lf ? getPane(lf.termId) : undefined;
+    void doSplit(focusedLeafId, dir, pane?.profileId, pane?.title || undefined, pane?.cwd());
   }
 
   // Button "+": open exactly one terminal. When empty, create the first; otherwise add evenly by
