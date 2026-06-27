@@ -10,6 +10,7 @@ import {
   type LeafNode,
   type SplitNode,
   type Dir,
+  type SessionV1,
   leaf,
   collectLeaves,
   findLeaf,
@@ -40,6 +41,10 @@ export interface Tiling {
   closePane(leafId: string): void;
   /** Subscribe to the open-terminals list; fires immediately with the current snapshot. */
   onChange(cb: (panes: PaneInfo[]) => void): () => void;
+  /** Snapshot the layout (tree + per-pane cwd/profile/title) for persistence. */
+  serialize(): SessionV1;
+  /** Rebuild a saved layout, spawning a fresh terminal per leaf. No-op unless currently empty. */
+  restore(session: SessionV1): Promise<void>;
   dispose(): void;
 }
 
@@ -581,6 +586,78 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     run();
   }
 
+  // ---- session restore ----------------------------------------------------
+
+  function serialize(): SessionV1 {
+    const leaves: SessionV1['leaves'] = {};
+    if (root) {
+      for (const lf of collectLeaves(root)) {
+        const pane = getPane(lf.termId);
+        const entry: SessionV1['leaves'][string] = {};
+        const cwd = pane?.cwd();
+        if (cwd) entry.cwd = cwd;
+        if (pane?.profileId) entry.profileId = pane.profileId;
+        if (pane?.title) entry.title = pane.title;
+        leaves[lf.id] = entry;
+      }
+    }
+    return { v: 1, root, focusedLeafId, maximizedId, leaves };
+  }
+
+  async function restore(session: SessionV1): Promise<void> {
+    if (root || !session.root) return; // only restore into an empty tiling
+    // Rebuild the saved structure, spawning one fresh terminal per leaf (saved profile + cwd), keeping
+    // the saved leaf ids so the saved focused/maximized references stay valid. Track what we spawn so
+    // a mid-build spawn failure — or the user opening a terminal during the async window — can be
+    // cleaned up instead of leaking a pty or clobbering the user's pane.
+    const spawned: LeafNode[] = [];
+    async function build(node: LayoutNode): Promise<LayoutNode> {
+      if (node.type === 'leaf') {
+        const meta = session.leaves[node.id] ?? {};
+        const { termId } = await createTerminal(meta.profileId, meta.title ?? '', meta.cwd);
+        order.push(node.id);
+        const n = parseInt(node.id.replace(/^leaf-/, ''), 10);
+        if (Number.isFinite(n) && n > leafSeq) leafSeq = n; // keep future leaf ids from colliding
+        const lf: LeafNode = { type: 'leaf', id: node.id, termId };
+        spawned.push(lf);
+        return lf;
+      }
+      const children: LayoutNode[] = [];
+      for (const c of node.children) children.push(await build(c));
+      return { type: 'split', dir: node.dir, children, ratios: node.ratios };
+    }
+    const discard = (): void => {
+      for (const lf of spawned) {
+        const oi = order.indexOf(lf.id);
+        if (oi >= 0) order.splice(oi, 1);
+        getPane(lf.termId)?.dispose();
+      }
+    };
+
+    let built: LayoutNode;
+    try {
+      built = await build(session.root);
+    } catch {
+      discard(); // a spawn failed partway — drop the half-built panes, leave the tiling empty
+      return;
+    }
+    if (root) {
+      discard(); // the user opened a terminal while we were spawning — let theirs win, drop ours
+      return;
+    }
+
+    root = built;
+    maximizedId = session.maximizedId && findLeaf(built, session.maximizedId) ? session.maximizedId : null;
+    // Only the maximized pane is mounted, so focus it; otherwise the saved focus (or the first leaf).
+    focusedLeafId =
+      maximizedId ??
+      (session.focusedLeafId && findLeaf(built, session.focusedLeafId)
+        ? session.focusedLeafId
+        : (collectLeaves(built)[0]?.id ?? null));
+    render();
+    if (focusedLeafId) focusLeaf(focusedLeafId);
+  }
+
   // ---- lifecycle ----------------------------------------------------------
 
   window.addEventListener('keydown', onKeydown, { capture: true });
@@ -603,6 +680,8 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
         if (i >= 0) listeners.splice(i, 1);
       };
     },
+    serialize,
+    restore,
     dispose() {
       window.removeEventListener('keydown', onKeydown, { capture: true });
       if (root) for (const lf of collectLeaves(root)) getPane(lf.termId)?.dispose();

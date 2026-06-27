@@ -21,6 +21,10 @@ export const CONTROL_CHANNELS = {
   clipboardRead: 'clipboard:read',
   clipboardWrite: 'clipboard:write',
 
+  /** renderer ↔ main: persisted window layout (session restore) */
+  sessionGet: 'session:get',
+  sessionSave: 'session:save',
+
   appVersion: 'app:version',
 } as const;
 

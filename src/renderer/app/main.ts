@@ -90,9 +90,29 @@ window.addEventListener(
 // terminals read live values. Then feed the Sessions sidebar from the tiling's change stream.
 initSettings()
   .then(() => createTiling(tilingHost))
-  .then((t) => {
+  .then(async (t) => {
     tiling = t;
     tiling.onChange((list) => sidebar.setSessions(list));
+
+    // Restore the previous layout (fresh shells in the saved cwds/profiles) before subscribing the
+    // save, so the restore isn't immediately persisted back over itself.
+    const saved = await ipc.session.get().catch(() => null);
+    if (saved?.root) await t.restore(saved);
+
+    let saveTimer: ReturnType<typeof setTimeout> | undefined;
+    let primed = false; // onChange fires once synchronously on subscribe — skip that initial no-op save
+    const scheduleSave = (): void => {
+      if (!primed) {
+        primed = true;
+        return;
+      }
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => ipc.session.save(t.serialize()), 400);
+    };
+    tiling.onChange(scheduleSave);
+    // Final save on unload (close/reload) captures the latest cwds before the page goes away.
+    window.addEventListener('pagehide', () => ipc.session.save(t.serialize()));
+
     const status = document.getElementById('shell-status');
     if (status) status.textContent = 'ready';
   })

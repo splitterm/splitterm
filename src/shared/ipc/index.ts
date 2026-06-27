@@ -7,6 +7,7 @@ export * from './settings.contract';
 import type { SpawnRequest, SpawnResponse, KillRequest } from './control.contract';
 import type { SettingsApi } from './settings.contract';
 import type { ShellProfile } from '../domain/profile';
+import type { SessionV1 } from '../domain/layout-tree';
 
 export type { ShellProfile } from '../domain/profile';
 
@@ -31,6 +32,12 @@ export interface SplittermApi {
     readText(): Promise<string>;
     /** write plain text to the OS clipboard (terminal copy) */
     writeText(text: string): Promise<void>;
+  };
+  session: {
+    /** the persisted layout to restore on launch (root === null = nothing saved) */
+    get(): Promise<SessionV1>;
+    /** persist the current layout (debounced + flushed on quit by main) */
+    save(session: SessionV1): void;
   };
   app: {
     version(): Promise<string>;

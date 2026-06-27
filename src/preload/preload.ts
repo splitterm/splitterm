@@ -27,6 +27,11 @@ const api: SplittermApi = {
     readText: () => ipcRenderer.invoke(CONTROL_CHANNELS.clipboardRead),
     writeText: (text) => ipcRenderer.invoke(CONTROL_CHANNELS.clipboardWrite, text),
   },
+  session: {
+    get: () => ipcRenderer.invoke(CONTROL_CHANNELS.sessionGet),
+    // send (not invoke) so the final save on pagehide dispatches synchronously before unload.
+    save: (session) => ipcRenderer.send(CONTROL_CHANNELS.sessionSave, session),
+  },
   app: {
     version: () => ipcRenderer.invoke(CONTROL_CHANNELS.appVersion),
   },

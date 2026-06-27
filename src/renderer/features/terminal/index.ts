@@ -101,6 +101,7 @@ export async function createTerminal(profileId?: string, title = '', initialCwd?
   registerPane(id, {
     el,
     title,
+    profileId,
     focus: () => term.focus(),
     fit: refit,
     cwd: () => cwd,

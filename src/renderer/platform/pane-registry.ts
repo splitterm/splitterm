@@ -9,6 +9,8 @@ export interface PaneHandle {
   el: HTMLElement;
   /** display title for the pane (e.g. the launch profile name); '' = none */
   title: string;
+  /** the profile id this pane was launched with (for session restore); undefined = default shell */
+  profileId?: string;
   focus(): void;
   fit(): void;
   /** the latest working directory the shell reported (OSC 7); undefined if never reported */

@@ -6,6 +6,7 @@ import { CONTROL_CHANNELS } from '@shared/ipc';
 import type { Settings } from '@shared/domain/settings.schema';
 import { startPtyHost, connectRendererPort, stopPtyHost, syncUserProfiles } from './pty-supervisor';
 import { loadSettings, getSettings, setSettings, onSettingsChange } from './settings-store';
+import { loadSession, saveSession, flushSession } from './session-store';
 import { isAllowedNavigation } from './nav-guard';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -100,6 +101,13 @@ ipcMain.handle(CONTROL_CHANNELS.clipboardWrite, (_e, text: unknown) => {
   // The renderer is the only caller, but it sits across the trust boundary — coerce to a string.
   clipboard.writeText(typeof text === 'string' ? text : '');
 });
+ipcMain.handle(CONTROL_CHANNELS.sessionGet, () => loadSession());
+ipcMain.on(CONTROL_CHANNELS.sessionSave, (_e, session: unknown) => saveSession(session));
+// Persist the final layout synchronously on quit. Both events: on a window-close quit the renderer's
+// pagehide save reaches main before before-quit; on an app-initiated quit (Cmd+Q) it can arrive after,
+// so will-quit (after windows tear down) gives that late save a second chance to be flushed.
+app.on('before-quit', () => flushSession());
+app.on('will-quit', () => flushSession());
 ipcMain.handle(CONTROL_CHANNELS.settingsGet, () => getSettings());
 ipcMain.handle(CONTROL_CHANNELS.settingsSet, (_e, patch: Partial<Settings>) => {
   setSettings(patch);
