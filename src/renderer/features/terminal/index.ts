@@ -1,11 +1,11 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { DEFAULTS } from '@shared/domain/settings.schema';
 import type { TermId } from '@shared/ids';
 import { ipc } from '@platform/ipc-client';
 import { registerTerminal, unregisterTerminal, writeToPty, resizePty, ackPty } from '@platform/pty-port';
 import { registerPane, deletePane } from '@platform/pane-registry';
+import { getSettings } from '@platform/settings-controller';
 import { readTerminalTheme } from './theme';
 
 export interface TerminalInstance {
@@ -23,12 +23,14 @@ export async function createTerminal(profileId?: string, title = ''): Promise<Te
   const el = document.createElement('div');
   el.className = 'term-pane';
 
+  const s = getSettings();
   const term = new Terminal({
     allowProposedApi: true,
-    scrollback: DEFAULTS.terminal.scrollback,
-    cursorBlink: DEFAULTS.terminal.cursorBlink,
-    fontFamily: DEFAULTS.font.family,
-    fontSize: DEFAULTS.font.size,
+    scrollback: s.terminal.scrollback,
+    cursorBlink: s.terminal.cursorBlink,
+    cursorStyle: s.terminal.cursorStyle,
+    fontFamily: s.font.family,
+    fontSize: s.font.size,
     theme: readTerminalTheme(),
   });
   const fit = new FitAddon();
@@ -67,6 +69,15 @@ export async function createTerminal(profileId?: string, title = ''): Promise<Te
     title,
     focus: () => term.focus(),
     fit: refit,
+    applySettings: (next) => {
+      term.options.fontFamily = next.font.family;
+      term.options.fontSize = next.font.size;
+      term.options.scrollback = next.terminal.scrollback;
+      term.options.cursorStyle = next.terminal.cursorStyle;
+      term.options.cursorBlink = next.terminal.cursorBlink;
+      term.options.theme = readTerminalTheme(); // re-read CSS vars (theme may have changed)
+      refit();
+    },
     dispose: () => {
       observer.disconnect();
       unregisterTerminal(id);

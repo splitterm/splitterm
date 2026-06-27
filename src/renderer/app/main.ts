@@ -1,12 +1,17 @@
-// Renderer composition root. M1 + topbar/sidebar chrome:
-//   topbar (sidebar toggle + brand) / body (terminal + sidebar drawer overlay) / statusbar.
+// Renderer composition root:
+//   topbar (sidebar toggle + brand + new-terminal + settings gear)
+//   body (Sessions sidebar drawer | tiles)
+//   statusbar
+// Settings live in a dedicated modal (topbar gear / Ctrl+,); the sidebar is the Sessions list.
 import '../styles/tokens.css';
 import '../styles/base.css';
 import { ipc } from '@platform/ipc-client';
 import { initPortBridge } from '@platform/pty-port';
+import { initSettings } from '@platform/settings-controller';
 import { createTiling, type Tiling } from '@features/tiling';
 import { createTopbar } from '../chrome/topbar';
 import { createSidebar } from '../chrome/sidebar';
+import { createSettingsModal } from '../chrome/settings';
 
 // Start listening for the PTY firehose port before anything spawns.
 initPortBridge();
@@ -22,12 +27,21 @@ const tilingHost = document.createElement('div');
 tilingHost.className = 'terminal-host';
 
 let tiling: Tiling | null = null;
-const sidebar = createSidebar(body);
+
+const settingsModal = createSettingsModal();
+
+const sidebar = createSidebar(body, {
+  onFocusPane: (leafId) => tiling?.focusPane(leafId),
+  onClosePane: (leafId) => tiling?.closePane(leafId),
+  isBlocked: () => settingsModal.isOpen(), // the modal owns Escape while it's open
+});
+
 const topbar = createTopbar({
   onToggleSidebar: () => sidebar.toggle(),
   onNewTerminal: () => void tiling?.addTerminal(),
   onPickProfile: (id, label) => void tiling?.addTerminal(id, label),
   onRemoveTerminal: () => tiling?.removeLast(),
+  onOpenSettings: () => settingsModal.open(),
 });
 
 body.append(sidebar.panel, tilingHost); // column 1 = sidebar, column 2 = tiles
@@ -40,10 +54,28 @@ statusbar.innerHTML = `
 `;
 
 root.replaceChildren(topbar, body, statusbar);
+document.body.appendChild(settingsModal.el); // fixed overlay, mounted at the document root
 
-createTiling(tilingHost)
+// Ctrl+, toggles settings (JetBrains/VS Code convention). Capture phase so it never reaches xterm.
+window.addEventListener(
+  'keydown',
+  (e) => {
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.code === 'Comma') {
+      e.preventDefault();
+      e.stopPropagation();
+      settingsModal.toggle();
+    }
+  },
+  { capture: true },
+);
+
+// Apply settings (theme/motion) before creating the tiling so the first paint is themed and new
+// terminals read live values. Then feed the Sessions sidebar from the tiling's change stream.
+initSettings()
+  .then(() => createTiling(tilingHost))
   .then((t) => {
     tiling = t;
+    tiling.onChange((list) => sidebar.setSessions(list));
     const status = document.getElementById('shell-status');
     if (status) status.textContent = 'ready';
   })

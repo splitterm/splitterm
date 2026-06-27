@@ -21,11 +21,25 @@ const GUTTER = 6; // px — transparent gap between cards; highlights on hover f
 const FOCUS_RING = 'pane-focused'; // styled in base.css (accent border on the focused card)
 const MIN_RATIO = 0.05;
 
+/** A snapshot row for the Sessions sidebar: one open terminal, in creation order. */
+export interface PaneInfo {
+  leafId: string;
+  termId: number;
+  title: string;
+  focused: boolean;
+}
+
 export interface Tiling {
   /** Add a terminal by splitting the largest pane (even tiling). */
   addTerminal(profileId?: string, title?: string): Promise<void>;
   /** Close the most-recently-created terminal (keeps at least one). */
   removeLast(): void;
+  /** Focus a specific pane (e.g. from the Sessions sidebar). */
+  focusPane(leafId: string): void;
+  /** Close a specific pane (e.g. from the Sessions sidebar). */
+  closePane(leafId: string): void;
+  /** Subscribe to the open-terminals list; fires immediately with the current snapshot. */
+  onChange(cb: (panes: PaneInfo[]) => void): () => void;
   dispose(): void;
 }
 
@@ -38,8 +52,30 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   let lastAdd = 0;
   let lastRemove = 0;
   const order: string[] = []; // leaf ids in creation order (existing leaves only)
+  const listeners: Array<(panes: PaneInfo[]) => void> = [];
 
-  const prefersReducedMotion = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // The open-terminals snapshot (creation order), for the Sessions sidebar.
+  function snapshot(): PaneInfo[] {
+    if (!root) return [];
+    const out: PaneInfo[] = [];
+    for (const id of order) {
+      const lf = findLeaf(root, id);
+      if (!lf) continue;
+      out.push({ leafId: id, termId: lf.termId, title: getPane(lf.termId)?.title ?? '', focused: id === focusedLeafId });
+    }
+    return out;
+  }
+  function emit(): void {
+    const s = snapshot();
+    for (const l of listeners) l(s);
+  }
+
+  // Honor BOTH the OS preference and the in-app "Reduce motion" toggle (settings-controller sets
+  // <html data-reduce-motion>). Without the attribute check, the split/close View Transition would
+  // keep its UA cross-fade even with the in-app toggle on (which only zeroes the CSS motion tokens).
+  const prefersReducedMotion = (): boolean =>
+    document.documentElement.dataset.reduceMotion === 'true' ||
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // Apply a layout change with a smooth View Transition (Chromium 148) when motion is allowed.
   function applyLayout(mutate: () => void): void {
@@ -250,6 +286,7 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   function render(): void {
     if (!root) {
       container.replaceChildren(emptyState());
+      emit();
       return;
     }
     if (maximizedId) {
@@ -257,12 +294,14 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
       if (node) {
         container.replaceChildren(buildLeaf(node));
         refitAll();
+        emit();
         return;
       }
       maximizedId = null;
     }
     container.replaceChildren(buildNode(root));
     refitAll();
+    emit();
   }
 
   function refitAll(): void {
@@ -294,6 +333,7 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     });
     const node = root ? findLeaf(root, id) : null;
     if (node) getPane(node.termId)?.focus();
+    emit(); // focus changed — refresh the Sessions highlight
   }
 
   async function doSplit(targetId: string, dir: Dir, profileId?: string, title?: string): Promise<void> {
@@ -545,6 +585,20 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   return {
     addTerminal,
     removeLast,
+    focusPane(leafId) {
+      if (root && findLeaf(root, leafId)) focusLeaf(leafId);
+    },
+    closePane(leafId) {
+      closeById(leafId);
+    },
+    onChange(cb) {
+      listeners.push(cb);
+      cb(snapshot());
+      return () => {
+        const i = listeners.indexOf(cb);
+        if (i >= 0) listeners.splice(i, 1);
+      };
+    },
     dispose() {
       window.removeEventListener('keydown', onKeydown, { capture: true });
       if (root) for (const lf of collectLeaves(root)) getPane(lf.termId)?.dispose();

@@ -1,14 +1,16 @@
-import { PanelLeft } from 'lucide';
+import { PanelLeft, Settings as SettingsIcon } from 'lucide';
 import { icon } from './icons';
 import { createNewTerminalButton } from './new-terminal-button';
 
-// The top bar: a draggable window region with the sidebar toggle + brand + new-terminal button.
-// Native window controls (min/max/close) are painted by the OS on the right via titleBarOverlay.
+// The top bar: a draggable window region with the sidebar toggle + brand + new-terminal button +
+// settings gear. Native window controls (min/max/close) are painted by the OS on the right via
+// titleBarOverlay.
 export function createTopbar(opts: {
   onToggleSidebar: () => void;
   onNewTerminal: () => void;
   onPickProfile: (profileId: string, label: string) => void;
   onRemoveTerminal: () => void;
+  onOpenSettings: () => void;
 }): HTMLElement {
   const bar = document.createElement('header');
   bar.className =
@@ -34,6 +36,17 @@ export function createTopbar(opts: {
     onRemove: opts.onRemoveTerminal,
   });
 
-  bar.append(toggle, brand, newTerminal);
+  const settings = document.createElement('button');
+  settings.type = 'button';
+  settings.title = 'Settings (Ctrl+,)';
+  settings.setAttribute('aria-label', 'Open settings');
+  settings.className =
+    'app-no-drag inline-flex items-center justify-center w-7 h-7 rounded-[var(--r-sm)] cursor-pointer ' +
+    'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] ' +
+    'transition-colors ease-[var(--ease-out)] duration-[var(--motion-fast)] motion-reduce:transition-none';
+  settings.appendChild(icon(SettingsIcon, 17));
+  settings.addEventListener('click', opts.onOpenSettings);
+
+  bar.append(toggle, brand, newTerminal, settings);
   return bar;
 }
