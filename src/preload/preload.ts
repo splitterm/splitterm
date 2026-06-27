@@ -23,6 +23,10 @@ const api: SplittermApi = {
       return () => ipcRenderer.removeListener(CONTROL_CHANNELS.settingsChanged, listener);
     },
   },
+  clipboard: {
+    readText: () => ipcRenderer.invoke(CONTROL_CHANNELS.clipboardRead),
+    writeText: (text) => ipcRenderer.invoke(CONTROL_CHANNELS.clipboardWrite, text),
+  },
   app: {
     version: () => ipcRenderer.invoke(CONTROL_CHANNELS.appVersion),
   },

@@ -6,15 +6,8 @@
 // type — overviewRulerWidth is left unset, so no ruler is reserved and the terminal stays clean.
 import type { Terminal } from '@xterm/xterm';
 import { SearchAddon, type ISearchOptions } from '@xterm/addon-search';
-import { ChevronUp, ChevronDown, X, createElement, type IconNode } from 'lucide';
-
-const icon = (node: IconNode, size = 14): SVGElement => {
-  const svg = createElement(node);
-  svg.setAttribute('width', String(size));
-  svg.setAttribute('height', String(size));
-  svg.setAttribute('aria-hidden', 'true');
-  return svg;
-};
+import { ChevronUp, ChevronDown, X, type IconNode } from 'lucide';
+import { icon } from './icon';
 
 export interface TerminalSearch {
   /** the overlay element; append into the term-pane (hidden until opened) */
