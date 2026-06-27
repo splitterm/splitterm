@@ -33,6 +33,9 @@
   --term-fg: #dfe1e5;
   --term-cursor: #dfe1e5;
   --term-selection: #214283;
+  /* Scrollback-search highlights: dim amber for matches, bright amber for the active match. */
+  --term-search-match: #4a3f1a;
+  --term-search-active: #c79030;
   --ansi-black: #000000;
   --ansi-red: #ff6b68;
   --ansi-green: #a8c023;
@@ -103,6 +106,8 @@
   --term-fg: #ededed;
   --term-cursor: #ededed;
   --term-selection: #1e3a66;
+  --term-search-match: #3d3414;
+  --term-search-active: #d99e34;
   --ansi-black: #3a3a3a;
   --ansi-red: #ff5f56;
   --ansi-green: #5af78e;
@@ -136,6 +141,8 @@
   --term-fg: #27282e;
   --term-cursor: #27282e;
   --term-selection: #c2d7fe;
+  --term-search-match: #ffe9a8;
+  --term-search-active: #ffc233;
   --ansi-black: #2e2e2e;
   --ansi-red: #c7392b;
   --ansi-green: #3c8e3c;

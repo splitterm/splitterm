@@ -7,6 +7,7 @@ import { registerTerminal, unregisterTerminal, writeToPty, resizePty, ackPty } f
 import { registerPane, deletePane } from '@platform/pane-registry';
 import { getSettings } from '@platform/settings-controller';
 import { readTerminalTheme } from './theme';
+import { createTerminalSearch } from './search';
 
 export interface TerminalInstance {
   termId: TermId;
@@ -36,6 +37,19 @@ export async function createTerminal(profileId?: string, title = ''): Promise<Te
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(el);
+
+  // Scrollback search, owned by this pane. Ctrl+F (or Ctrl+Shift+F / Cmd+F) opens it; intercepted at
+  // the xterm level so it never reaches the shell, and so it always targets the focused pane.
+  const search = createTerminalSearch(term);
+  el.appendChild(search.el);
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      search.open();
+      return false;
+    }
+    return true;
+  });
 
   const { id } = await ipc.pty.spawn({ cols: term.cols || 80, rows: term.rows || 24, profileId });
 
@@ -80,6 +94,7 @@ export async function createTerminal(profileId?: string, title = ''): Promise<Te
     },
     dispose: () => {
       observer.disconnect();
+      search.dispose();
       unregisterTerminal(id);
       ipc.pty.kill({ id });
       term.dispose();
