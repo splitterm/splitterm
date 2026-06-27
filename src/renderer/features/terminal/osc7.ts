@@ -11,10 +11,17 @@ export function parseOsc7(data: string): string | undefined {
   try {
     const url = new URL(data);
     if (url.protocol !== 'file:') return undefined;
-    let path = decodeURIComponent(url.pathname);
-    // Windows drive paths arrive as "/C:/Users/x" — drop the leading slash so node-pty gets "C:/Users/x".
-    if (/^\/[A-Za-z]:/.test(path)) path = path.slice(1);
-    // A root-only or empty path (bare "file://", "file:///", "file://host") isn't a usable cwd.
+    const path = decodeURIComponent(url.pathname);
+    // A Windows drive path "/C:/Users/x" → "C:/Users/x". A host here is just the reporting machine
+    // (e.g. file://DESKTOP/C:/x) — ignore it; the drive letter means it's a local path, not UNC.
+    if (/^\/[A-Za-z]:/.test(path)) return path.slice(1);
+    // No drive letter but a host → a UNC path: "file://server/share/dir" → "\\server\share\dir".
+    const host = url.hostname;
+    if (host && host !== 'localhost') {
+      if (path === '' || path === '/') return undefined; // bare host with no share isn't a usable cwd
+      return `\\\\${host}${path.replace(/\//g, '\\')}`;
+    }
+    // A root-only or empty POSIX path (bare "file://", "file:///") isn't a usable cwd.
     if (path === '' || path === '/') return undefined;
     return path;
   } catch {

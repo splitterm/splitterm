@@ -58,7 +58,7 @@ try {
   await sleep(300);
   await win.locator('.settings-dialog button[data-category="terminal"]').click();
   await sleep(300);
-  const sw = win.locator('.settings-dialog button[role="switch"]').last(); // Shell integration is the last switch
+  const sw = win.locator('.settings-dialog button[role="switch"][aria-label="Shell integration"]'); // row() sets aria-label from the label
   result.defaultOn = (await sw.getAttribute('aria-checked')) === 'true';
   if (result.defaultOn) await sw.click();
   await sleep(200);

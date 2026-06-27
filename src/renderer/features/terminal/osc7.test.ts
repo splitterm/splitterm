@@ -17,6 +17,19 @@ describe('parseOsc7', () => {
     expect(parseOsc7('file:///home/a%20b')).toBe('/home/a b');
   });
 
+  it('round-trips URL-significant characters (the shim percent-encodes them)', () => {
+    expect(parseOsc7('file:///C:/a%23b')).toBe('C:/a#b'); // '#' would otherwise be a fragment
+    expect(parseOsc7('file:///C:/100%25done')).toBe('C:/100%done'); // literal '%'
+    expect(parseOsc7('file:///C:/q%3Fx')).toBe('C:/q?x'); // '?' would otherwise be a query
+  });
+
+  it('reconstructs a UNC path from a file://server/share URI', () => {
+    expect(parseOsc7('file://server/share/dir')).toBe('\\\\server\\share\\dir');
+    expect(parseOsc7('file://nas/team%20share/x')).toBe('\\\\nas\\team share\\x');
+    expect(parseOsc7('file://server')).toBeUndefined(); // bare host, no share
+    expect(parseOsc7('file://localhost/C:/x')).toBe('C:/x'); // localhost is local, not UNC
+  });
+
   it('rejects non-file schemes and garbage', () => {
     expect(parseOsc7('http://example.com/x')).toBeUndefined();
     expect(parseOsc7('not a url')).toBeUndefined();

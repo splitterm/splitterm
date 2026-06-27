@@ -6,12 +6,14 @@
 import type { ResolvedShell } from './shell-detect';
 
 // $__sp captures the existing prompt; the new prompt emits OSC 7 for filesystem locations then calls
-// it. .Replace([char]92,'/') turns C:\x into C:/x with no backslash literal to escape. Single line.
+// it. [uri]$path.AbsoluteUri builds a canonical, percent-encoded file URI (so '#', '%', spaces etc.
+// round-trip through the renderer's decodeURIComponent, and UNC paths get the right file://server/…
+// form) instead of hand-concatenating. Single line.
 const POWERSHELL_OSC7 =
   `$__sp = $function:prompt; function global:prompt { ` +
   `try { $l = $ExecutionContext.SessionState.Path.CurrentLocation; ` +
   `if ($l.Provider.Name -eq 'FileSystem') { ` +
-  `[Console]::Write([char]27 + ']7;file:///' + $l.ProviderPath.Replace([char]92,'/') + [char]7) } } catch { }; ` +
+  `[Console]::Write([char]27 + ']7;' + ([uri]$l.ProviderPath).AbsoluteUri + [char]7) } } catch { }; ` +
   `if ($__sp) { & $__sp } else { 'PS ' + (Get-Location).Path + '> ' } }`;
 
 const isPowerShell = (file: string): boolean => /(?:^|[\\/])(?:pwsh|powershell)(?:\.exe)?$/i.test(file);

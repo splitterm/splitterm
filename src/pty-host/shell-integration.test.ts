@@ -38,7 +38,8 @@ describe('withShellIntegration', () => {
   it('the encoded command decodes to a profile-preserving OSC 7 prompt wrapper', () => {
     const out = withShellIntegration({ file: 'pwsh.exe', args: [] }, true);
     const script = decode(out.args[out.args.indexOf('-EncodedCommand') + 1]!);
-    expect(script).toContain(']7;file:///'); // OSC 7 sequence
+    expect(script).toContain(']7;'); // OSC 7 introducer
+    expect(script).toContain('.AbsoluteUri'); // canonical, percent-encoded file URI
     expect(script).toContain('function global:prompt'); // redefines the prompt
     expect(script).toContain('$__sp = $function:prompt'); // captures the existing prompt
     expect(script).toContain('& $__sp'); // calls it (preserves a custom prompt)
