@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, session, type WebContents } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, Menu, session, type WebContents } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import started from 'electron-squirrel-startup';
@@ -95,6 +95,11 @@ const createWindow = (): void => {
 };
 
 ipcMain.handle(CONTROL_CHANNELS.appVersion, () => app.getVersion());
+ipcMain.handle(CONTROL_CHANNELS.clipboardRead, () => clipboard.readText());
+ipcMain.handle(CONTROL_CHANNELS.clipboardWrite, (_e, text: unknown) => {
+  // The renderer is the only caller, but it sits across the trust boundary — coerce to a string.
+  clipboard.writeText(typeof text === 'string' ? text : '');
+});
 ipcMain.handle(CONTROL_CHANNELS.settingsGet, () => getSettings());
 ipcMain.handle(CONTROL_CHANNELS.settingsSet, (_e, patch: Partial<Settings>) => {
   setSettings(patch);

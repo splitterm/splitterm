@@ -8,6 +8,7 @@ import { registerPane, deletePane } from '@platform/pane-registry';
 import { getSettings } from '@platform/settings-controller';
 import { readTerminalTheme } from './theme';
 import { createTerminalSearch } from './search';
+import { createTerminalClipboard } from './clipboard';
 
 export interface TerminalInstance {
   termId: TermId;
@@ -38,14 +39,21 @@ export async function createTerminal(profileId?: string, title = ''): Promise<Te
   term.loadAddon(fit);
   term.open(el);
 
-  // Scrollback search, owned by this pane. Ctrl+F (or Ctrl+Shift+F / Cmd+F) opens it; intercepted at
-  // the xterm level so it never reaches the shell, and so it always targets the focused pane.
+  // Search + copy/paste, owned by this pane. Both are intercepted at the xterm level so they never
+  // reach the shell and always target the focused pane. One custom handler routes the keys.
   const search = createTerminalSearch(term);
   el.appendChild(search.el);
+  const clip = createTerminalClipboard(term, el);
   term.attachCustomKeyEventHandler((e) => {
-    if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'f' || e.key === 'F')) {
+    if (e.type !== 'keydown') return true;
+    const mod = (e.ctrlKey || e.metaKey) && !e.altKey;
+    if (mod && e.code === 'KeyF') {
       e.preventDefault();
-      search.open();
+      search.open(); // Ctrl+F / Ctrl+Shift+F / Cmd+F
+      return false;
+    }
+    if (clip.handleKey(e)) {
+      e.preventDefault();
       return false;
     }
     return true;
@@ -96,6 +104,7 @@ export async function createTerminal(profileId?: string, title = ''): Promise<Te
     dispose: () => {
       observer.disconnect();
       search.dispose();
+      clip.dispose();
       unregisterTerminal(id);
       ipc.pty.kill({ id });
       term.dispose();

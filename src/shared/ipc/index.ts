@@ -26,6 +26,12 @@ export interface SplittermApi {
     onHostCrashed(cb: () => void): () => void;
   };
   settings: SettingsApi;
+  clipboard: {
+    /** read the OS clipboard as plain text (terminal paste) */
+    readText(): Promise<string>;
+    /** write plain text to the OS clipboard (terminal copy) */
+    writeText(text: string): Promise<void>;
+  };
   app: {
     version(): Promise<string>;
   };

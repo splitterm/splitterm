@@ -17,6 +17,10 @@ export const CONTROL_CHANNELS = {
   /** main → renderer broadcast after a settings change (UI or external edit) */
   settingsChanged: 'settings:changed',
 
+  /** renderer → main: OS clipboard read/write (terminal copy/paste) */
+  clipboardRead: 'clipboard:read',
+  clipboardWrite: 'clipboard:write',
+
   appVersion: 'app:version',
 } as const;
 
