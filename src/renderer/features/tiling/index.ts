@@ -70,7 +70,12 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     for (const l of listeners) l(s);
   }
 
-  const prefersReducedMotion = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Honor BOTH the OS preference and the in-app "Reduce motion" toggle (settings-controller sets
+  // <html data-reduce-motion>). Without the attribute check, the split/close View Transition would
+  // keep its UA cross-fade even with the in-app toggle on (which only zeroes the CSS motion tokens).
+  const prefersReducedMotion = (): boolean =>
+    document.documentElement.dataset.reduceMotion === 'true' ||
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // Apply a layout change with a smooth View Transition (Chromium 148) when motion is allowed.
   function applyLayout(mutate: () => void): void {

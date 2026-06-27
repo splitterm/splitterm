@@ -20,7 +20,12 @@ export interface Sidebar {
 /** `layout` is the body grid element; opening toggles `sidebar-open` on it to animate the columns. */
 export function createSidebar(
   layout: HTMLElement,
-  opts: { onFocusPane: (leafId: string) => void; onClosePane: (leafId: string) => void },
+  opts: {
+    onFocusPane: (leafId: string) => void;
+    onClosePane: (leafId: string) => void;
+    /** when this returns true (e.g. the settings modal is open), Escape is left for that layer */
+    isBlocked?: () => boolean;
+  },
 ): Sidebar {
   const panel = document.createElement('aside');
   panel.className = 'sidebar-panel';
@@ -59,16 +64,29 @@ export function createSidebar(
   }
 
   function renderRow(p: PaneInfo, index: number): HTMLElement {
+    const label = p.title || `Terminal ${index + 1}`;
+    // A clickable row whose primary action (focus this terminal) must be keyboard-reachable, so it
+    // gets role=button + tabindex + Enter/Space — not just a click handler on a bare <div>.
     const rowEl = document.createElement('div');
+    rowEl.setAttribute('role', 'button');
+    rowEl.tabIndex = 0;
+    rowEl.setAttribute('aria-label', `Focus ${label}`);
     rowEl.className =
       'group flex items-center gap-2 px-2 h-8 rounded-[var(--r-sm)] cursor-pointer ' +
+      'outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)] ' +
       (p.focused ? 'bg-[var(--bg-active)] text-[var(--text-primary)]' : 'hover:bg-[var(--bg-hover)] text-[var(--text-secondary)]');
     rowEl.addEventListener('click', () => opts.onFocusPane(p.leafId));
+    rowEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        opts.onFocusPane(p.leafId);
+      }
+    });
 
     rowEl.append(icon(SquareTerminal, 14));
     const name = document.createElement('span');
     name.className = 'flex-1 min-w-0 truncate text-[12px]';
-    name.textContent = p.title || `Terminal ${index + 1}`;
+    name.textContent = label;
     rowEl.append(name);
 
     const close = document.createElement('button');
@@ -105,7 +123,8 @@ export function createSidebar(
   window.addEventListener(
     'keydown',
     (e) => {
-      if (e.key === 'Escape' && open) {
+      // Leave Escape to the top-most layer: if the settings modal is open, it owns this keystroke.
+      if (e.key === 'Escape' && open && !opts.isBlocked?.()) {
         e.preventDefault();
         e.stopPropagation();
         open = false;

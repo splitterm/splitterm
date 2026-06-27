@@ -28,12 +28,13 @@ tilingHost.className = 'terminal-host';
 
 let tiling: Tiling | null = null;
 
+const settingsModal = createSettingsModal();
+
 const sidebar = createSidebar(body, {
   onFocusPane: (leafId) => tiling?.focusPane(leafId),
   onClosePane: (leafId) => tiling?.closePane(leafId),
+  isBlocked: () => settingsModal.isOpen(), // the modal owns Escape while it's open
 });
-
-const settingsModal = createSettingsModal();
 
 const topbar = createTopbar({
   onToggleSidebar: () => sidebar.toggle(),

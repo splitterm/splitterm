@@ -4,6 +4,7 @@
 import { Palette, SquareTerminal, Boxes, X, type IconNode } from 'lucide';
 import { icon } from '../icons';
 import { ipc } from '@platform/ipc-client';
+import { getSettings } from '@platform/settings-controller';
 import { createAppearanceSection } from './appearance-section';
 import { createTerminalSection } from './terminal-section';
 import { createProfilesSection } from './profiles-section';
@@ -39,6 +40,9 @@ export function createSettingsModal(): SettingsModal {
     'settings-dialog relative flex w-[820px] max-w-[92vw] h-[560px] max-h-[88vh] overflow-hidden ' +
     'rounded-[var(--r-lg)] border border-[var(--border)] bg-[var(--bg-surface)] ' +
     'shadow-[0_24px_64px_rgba(0,0,0,0.5)]';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-labelledby', 'settings-dialog-title');
 
   // ---- left rail ----
   const rail = document.createElement('div');
@@ -68,6 +72,7 @@ export function createSettingsModal(): SettingsModal {
   const head = document.createElement('div');
   head.className = 'flex items-center justify-between h-11 px-4 shrink-0 border-b border-[var(--border)]';
   const headTitle = document.createElement('div');
+  headTitle.id = 'settings-dialog-title'; // names the dialog (aria-labelledby); updates per section
   headTitle.className = 'text-[13px] font-semibold text-[var(--text-primary)]';
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
@@ -100,16 +105,25 @@ export function createSettingsModal(): SettingsModal {
     }
   }
 
+  let rebuildSeq = 0;
   async function rebuild(): Promise<void> {
+    const gen = ++rebuildSeq;
     const cat = CATEGORIES.find((c) => c.id === active);
     headTitle.textContent = cat?.label ?? 'Settings';
     paintNav();
-    if (active === 'profiles') {
-      const [s, shells] = await Promise.all([ipc.settings.get(), ipc.pty.profiles().catch(() => [])]);
-      body.replaceChildren(createProfilesSection(s, shells));
+    // Appearance/Terminal render synchronously from the live snapshot the settings-controller keeps
+    // current, so the rail highlight and the body can never disagree. Profiles also needs the
+    // detected-shell list, so it awaits that one IPC — guarded so a superseded rebuild can't win the
+    // race and paint a stale section after a quicker, later-clicked category already rendered.
+    const s = getSettings();
+    if (active === 'appearance') {
+      body.replaceChildren(createAppearanceSection(s));
+    } else if (active === 'terminal') {
+      body.replaceChildren(createTerminalSection(s));
     } else {
-      const s = await ipc.settings.get();
-      body.replaceChildren(active === 'appearance' ? createAppearanceSection(s) : createTerminalSection(s));
+      const shells = await ipc.pty.profiles().catch(() => []);
+      if (gen !== rebuildSeq) return; // a newer rebuild started while we awaited — drop this one
+      body.replaceChildren(createProfilesSection(getSettings(), shells));
     }
   }
 
@@ -118,17 +132,43 @@ export function createSettingsModal(): SettingsModal {
     void rebuild();
   }
 
+  let lastFocused: HTMLElement | null = null;
   function open(): void {
     if (opened) return;
     opened = true;
+    lastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     overlay.classList.add('open');
     void rebuild();
+    // Pull focus into the dialog. Without this, opening via Ctrl+, leaves focus on the xterm behind
+    // the backdrop and the user's keystrokes go to that terminal. The active nav button always exists.
+    navButtons.get(active)?.focus();
   }
   function close(): void {
     if (!opened) return;
     opened = false;
     overlay.classList.remove('open');
+    lastFocused?.focus(); // restore focus to whatever opened it (the gear, or the focused terminal)
+    lastFocused = null;
   }
+
+  // Focus trap: keep Tab inside the dialog while open. The dimmed background is still in the tab
+  // order, so without this Tab would walk into the terminal/topbar behind the modal.
+  dialog.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    const focusables = [...dialog.querySelectorAll<HTMLElement>(
+      'button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    )].filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (!first || !last) return;
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
 
   window.addEventListener(
     'keydown',

@@ -28,8 +28,10 @@ export function createProfilesSection(initial: Settings, shells: ShellProfile[])
   form.className = 'flex flex-col gap-2 pt-1';
   const nameInput = textControl({ value: '', placeholder: 'Name (e.g. Claude)', onChange: () => {} });
   nameInput.classList.remove('min-w-[240px]');
+  nameInput.setAttribute('aria-label', 'Profile name');
   const shellSelect = document.createElement('select');
   shellSelect.className = FIELD + ' cursor-pointer';
+  shellSelect.setAttribute('aria-label', 'Base shell');
   for (const s of shells) {
     const opt = document.createElement('option');
     opt.value = s.id;
@@ -38,6 +40,7 @@ export function createProfilesSection(initial: Settings, shells: ShellProfile[])
   }
   const cmdInput = textControl({ value: '', placeholder: 'Startup command (optional, e.g. claude)', onChange: () => {} });
   cmdInput.classList.remove('min-w-[240px]');
+  cmdInput.setAttribute('aria-label', 'Startup command');
   const addBtn = document.createElement('button');
   addBtn.type = 'submit';
   addBtn.className =
@@ -96,7 +99,11 @@ export function createProfilesSection(initial: Settings, shells: ShellProfile[])
 
   async function removeProfile(id: string): Promise<void> {
     profiles = profiles.filter((p) => p.id !== id);
-    await ipc.settings.set({ profiles });
+    const patch: Partial<Settings> = { profiles };
+    // If this profile was the "+" default, clear the dangling reference atomically with the delete
+    // (otherwise defaultProfileId keeps pointing at a now-missing id and "+" silently falls back).
+    if (id === initial.defaultProfileId) patch.defaultProfileId = '';
+    await ipc.settings.set(patch);
     renderList();
   }
 

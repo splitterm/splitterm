@@ -21,6 +21,11 @@ export function row(label: string, control: HTMLElement, hint?: string): HTMLEle
     h.textContent = hint;
     left.append(h);
   }
+  // The visible label sits in a sibling div, so give the control an accessible name from it (unless
+  // the caller already set one) — otherwise a screen reader announces a bare "switch"/"combo box".
+  if (!control.hasAttribute('aria-label') && !control.hasAttribute('aria-labelledby')) {
+    control.setAttribute('aria-label', label);
+  }
   control.classList.add('shrink-0');
   wrap.append(left, control);
   return wrap;
