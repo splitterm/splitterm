@@ -23,4 +23,18 @@ describe('parseOsc7', () => {
     expect(parseOsc7('')).toBeUndefined();
     expect(parseOsc7('7;file:///x')).toBeUndefined(); // payload must already be stripped of "7;"
   });
+
+  it('never throws on malformed percent-escapes (untrusted output runs in xterm parser)', () => {
+    // decodeURIComponent throws URIError on these; parseOsc7 must stay total and return undefined.
+    expect(parseOsc7('file:///a%2')).toBeUndefined();
+    expect(parseOsc7('file:///%ZZ')).toBeUndefined();
+    expect(parseOsc7('file:///C:/a%ZZ')).toBeUndefined();
+    expect(parseOsc7('file:///home/100%done')).toBeUndefined();
+  });
+
+  it('treats an empty / root-only path as no cwd (not "/")', () => {
+    expect(parseOsc7('file://')).toBeUndefined();
+    expect(parseOsc7('file:///')).toBeUndefined();
+    expect(parseOsc7('file://localhost')).toBeUndefined();
+  });
 });
