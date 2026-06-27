@@ -40,7 +40,7 @@ describe('normalize', () => {
       schemaVersion: 1,
       appearance: { theme: 'Light', followOS: false, reduceMotion: true },
       font: { family: 'Fira Code', size: 16 },
-      terminal: { scrollback: 5000, cursorStyle: 'bar' as const, cursorBlink: false },
+      terminal: { scrollback: 5000, cursorStyle: 'bar' as const, cursorBlink: false, shellIntegration: false },
       profiles: [{ id: 'p1', name: 'Claude', baseShellId: 'pwsh', startupCommand: 'claude' }],
       defaultProfileId: 'p1',
       restoreSession: false,

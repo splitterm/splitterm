@@ -81,6 +81,18 @@ export function createTerminalSection(initial: Settings): HTMLElement {
       }),
       'Lines of history kept per terminal.',
     ),
+    sectionHeading('Integration'),
+    row(
+      'Shell integration',
+      toggle({
+        checked: local.terminal.shellIntegration,
+        onChange: (v) => {
+          local.terminal.shellIntegration = v;
+          saveTerm();
+        },
+      }),
+      'Report the working directory from PowerShell (OSC 7) so a split opens in the same folder. Applies to new terminals.',
+    ),
   );
   return el;
 }

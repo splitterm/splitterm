@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import type { TermId } from '@shared/ids';
 import type { PortLike, SpawnRequest, HostToRenderer } from '@shared/ipc';
 import { homeDir, sanitizedEnv, type ResolvedShell } from './shell-detect';
+import { withShellIntegration } from './shell-integration';
 
 // Watermark flow control: pause node-pty when the renderer is behind on acks, resume when it catches
 // up. Bounds CPU + RAM under a flood (yes | cat). Thresholds count UTF-16 code units (xterm string
@@ -65,9 +66,11 @@ function resolveCwd(cwd: string | undefined): string {
 }
 
 export function spawnPty(id: TermId, opts: SpawnRequest, shell: ResolvedShell, startupCommand?: string): void {
+  // Optionally inject OSC 7 cwd reporting into PowerShell (so cwd-on-split works on a stock prompt).
+  const eff = withShellIntegration(shell, opts.shellIntegration ?? false);
   let pty: IPty;
   try {
-    pty = spawn(shell.file, shell.args, {
+    pty = spawn(eff.file, eff.args, {
       name: 'xterm-256color',
       cols: opts.cols > 0 ? opts.cols : 80,
       rows: opts.rows > 0 ? opts.rows : 24,

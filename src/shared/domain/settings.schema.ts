@@ -24,6 +24,8 @@ export interface Settings {
     scrollback: number;
     cursorStyle: 'block' | 'bar' | 'underline';
     cursorBlink: boolean;
+    /** inject OSC 7 cwd reporting into PowerShell so cwd-on-split works on a stock prompt */
+    shellIntegration: boolean;
   };
   /** user-defined launch profiles, shown in the new-terminal dropdown */
   profiles: UserProfile[];
@@ -37,7 +39,7 @@ export const DEFAULTS: Settings = {
   schemaVersion: 1,
   appearance: { theme: 'JetBrains Dark', followOS: true, reduceMotion: false },
   font: { family: 'JetBrains Mono, Cascadia Code, ui-monospace, monospace', size: 13 },
-  terminal: { scrollback: 1000, cursorStyle: 'block', cursorBlink: true },
+  terminal: { scrollback: 1000, cursorStyle: 'block', cursorBlink: true, shellIntegration: true },
   profiles: [],
   defaultProfileId: '',
   restoreSession: true,
@@ -118,6 +120,7 @@ export function normalize(input: unknown): Settings {
       scrollback: int(terminal.scrollback, DEFAULTS.terminal.scrollback, SCROLLBACK_MIN, SCROLLBACK_MAX),
       cursorStyle: oneOf(terminal.cursorStyle, CURSOR_STYLES, DEFAULTS.terminal.cursorStyle),
       cursorBlink: bool(terminal.cursorBlink, DEFAULTS.terminal.cursorBlink),
+      shellIntegration: bool(terminal.shellIntegration, DEFAULTS.terminal.shellIntegration),
     },
     profiles: Array.isArray(root.profiles)
       ? root.profiles.map(normalizeProfile).filter((p): p is UserProfile => p !== null)

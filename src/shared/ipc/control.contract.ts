@@ -9,6 +9,8 @@ export interface SpawnRequest {
   cwd?: string;
   cols: number;
   rows: number;
+  /** inject OSC 7 cwd reporting into PowerShell (so cwd-on-split works on a stock prompt) */
+  shellIntegration?: boolean;
 }
 export interface SpawnResponse {
   id: TermId;

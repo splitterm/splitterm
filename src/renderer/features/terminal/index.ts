@@ -71,7 +71,13 @@ export async function createTerminal(profileId?: string, title = '', initialCwd?
     return true;
   });
 
-  const { id } = await ipc.pty.spawn({ cols: term.cols || 80, rows: term.rows || 24, profileId, cwd });
+  const { id } = await ipc.pty.spawn({
+    cols: term.cols || 80,
+    rows: term.rows || 24,
+    profileId,
+    cwd,
+    shellIntegration: s.terminal.shellIntegration,
+  });
 
   registerTerminal(
     id,
