@@ -22,6 +22,8 @@ export interface TerminalSearch {
   open(): void;
   close(): void;
   isOpen(): boolean;
+  /** re-run the current query in place — e.g. after a theme change, to recolor live decorations */
+  reapply(): void;
   dispose(): void;
 }
 
@@ -30,7 +32,8 @@ export function createTerminalSearch(term: Terminal): TerminalSearch {
   term.loadAddon(search);
 
   const cssVar = (name: string): string => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  // Re-read on each search so a live theme change is picked up.
+  // Tokens are read per call, so the NEXT find uses current theme colors. Decorations already drawn
+  // aren't restyled in place, so reapply() re-runs the query after a live theme change (see index.ts).
   const options = (incremental: boolean): ISearchOptions => ({
     incremental,
     decorations: {
@@ -45,8 +48,11 @@ export function createTerminalSearch(term: Terminal): TerminalSearch {
   // ---- DOM ----
   const el = document.createElement('div');
   el.setAttribute('role', 'search');
+  // z-20 sits above the pane's z-10 chrome (close/drag buttons) so the bar's own controls — its
+  // close 'X' especially — are clickable and don't fall onto the (invisible but hit-testing) pane
+  // close button beneath them.
   el.className =
-    'term-search app-no-drag absolute top-2 right-2 z-10 hidden items-center gap-1 h-8 pl-2 pr-1 ' +
+    'term-search app-no-drag absolute top-2 right-2 z-20 hidden items-center gap-1 h-8 pl-2 pr-1 ' +
     'rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--bg-elevated)] ' +
     'shadow-[0_8px_24px_rgba(0,0,0,0.36)]';
 
@@ -60,6 +66,8 @@ export function createTerminalSearch(term: Terminal): TerminalSearch {
 
   const count = document.createElement('span');
   count.className = 'term-search-count text-[11px] text-[var(--text-secondary)] tabular-nums min-w-[48px] text-right px-1';
+  count.setAttribute('aria-live', 'polite'); // announce match-count changes to screen readers
+  count.setAttribute('aria-atomic', 'true');
 
   const button = (glyph: IconNode, label: string, onClick: () => void): HTMLButtonElement => {
     const b = document.createElement('button');
@@ -97,11 +105,12 @@ export function createTerminalSearch(term: Terminal): TerminalSearch {
   el.append(input, count, prev, next, closeBtn);
 
   const sub = search.onDidChangeResults(({ resultIndex, resultCount }) => {
-    if (!input.value) {
-      count.textContent = '';
-      return;
-    }
-    count.textContent = resultCount === 0 ? 'No results' : `${resultIndex + 1}/${resultCount}`;
+    if (!input.value) count.textContent = '';
+    else if (resultCount === 0) count.textContent = 'No results';
+    // resultIndex is -1 when the active match sits beyond the addon's highlight cap (~1000); show
+    // "N+" rather than a misleading "0/N".
+    else if (resultIndex < 0) count.textContent = `${resultCount}+`;
+    else count.textContent = `${resultIndex + 1}/${resultCount}`;
   });
 
   input.addEventListener('input', () => find(true, true)); // incremental as you type
@@ -138,6 +147,9 @@ export function createTerminalSearch(term: Terminal): TerminalSearch {
     open: openSearch,
     close,
     isOpen: () => open,
+    reapply: () => {
+      if (open && input.value) find(true, true); // re-highlight in place with current theme colors
+    },
     dispose: () => {
       sub.dispose();
       search.dispose();

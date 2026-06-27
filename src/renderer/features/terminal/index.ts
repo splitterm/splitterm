@@ -90,6 +90,7 @@ export async function createTerminal(profileId?: string, title = ''): Promise<Te
       term.options.cursorStyle = next.terminal.cursorStyle;
       term.options.cursorBlink = next.terminal.cursorBlink;
       term.options.theme = readTerminalTheme(); // re-read CSS vars (theme may have changed)
+      search.reapply(); // recolor live search highlights if the bar is open
       refit();
     },
     dispose: () => {

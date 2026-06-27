@@ -80,7 +80,23 @@ try {
   await sleep(300);
   result.searchBarHiddenAfterEscape = !(await win.locator('.term-search').first().isVisible().catch(() => true));
 
-  const ok = result.searchBarVisible && result.foundMatches && result.searchBarHiddenAfterEscape;
+  // Reopen, then click the bar's own X — it must close the search, NOT the pane beneath it (the pane
+  // close button shares the top-right corner, so the bar's stacking must win the hit-test).
+  await win.locator('.xterm-screen').first().click();
+  await sleep(150);
+  await win.keyboard.press('Control+f');
+  await sleep(300);
+  await win.locator('.term-search button[aria-label="Close (Escape)"]').first().click();
+  await sleep(300);
+  result.paneSurvivedXClick = (await win.locator('[data-leaf-id]').count()) === result.paneCount;
+  result.searchBarHiddenAfterX = !(await win.locator('.term-search').first().isVisible().catch(() => true));
+
+  const ok =
+    result.searchBarVisible &&
+    result.foundMatches &&
+    result.searchBarHiddenAfterEscape &&
+    result.paneSurvivedXClick &&
+    result.searchBarHiddenAfterX;
   await finish(ok ? 0 : 1);
 } catch (err) {
   result.error = String(err && err.message ? err.message : err);

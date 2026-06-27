@@ -33,7 +33,9 @@ const settingsModal = createSettingsModal();
 const sidebar = createSidebar(body, {
   onFocusPane: (leafId) => tiling?.focusPane(leafId),
   onClosePane: (leafId) => tiling?.closePane(leafId),
-  isBlocked: () => settingsModal.isOpen(), // the modal owns Escape while it's open
+  // Yield Escape to whatever layer owns it: the settings modal, or a focused terminal search bar
+  // (its own bubble-phase Escape closes it; the sidebar must not swallow that keystroke first).
+  isBlocked: () => settingsModal.isOpen() || document.activeElement?.closest('.term-search') != null,
 });
 
 const topbar = createTopbar({
