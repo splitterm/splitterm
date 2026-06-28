@@ -23,7 +23,15 @@ export interface Settings {
   terminal: {
     scrollback: number;
     cursorStyle: 'block' | 'bar' | 'underline';
+    /** how the cursor looks when the pane is unfocused */
+    cursorInactiveStyle: 'outline' | 'block' | 'bar' | 'underline' | 'none';
     cursorBlink: boolean;
+    /** line height as a multiple of the font size (1.0 = tight) */
+    lineHeight: number;
+    /** extra horizontal space between cells, in pixels */
+    letterSpacing: number;
+    /** font weight for normal text (100–900) */
+    fontWeight: number;
     /** inject OSC 7 cwd reporting into PowerShell so cwd-on-split works on a stock prompt */
     shellIntegration: boolean;
     /** GPU-accelerated rendering (xterm WebGL addon); falls back to the DOM renderer if unavailable */
@@ -47,7 +55,17 @@ export const DEFAULTS: Settings = {
   schemaVersion: 1,
   appearance: { theme: 'JetBrains Dark', followOS: true, reduceMotion: false },
   font: { family: 'JetBrains Mono, Cascadia Code, ui-monospace, monospace', size: 13 },
-  terminal: { scrollback: 1000, cursorStyle: 'block', cursorBlink: true, shellIntegration: true, webgl: false },
+  terminal: {
+    scrollback: 1000,
+    cursorStyle: 'block',
+    cursorInactiveStyle: 'outline',
+    cursorBlink: true,
+    lineHeight: 1.0,
+    letterSpacing: 0,
+    fontWeight: 400,
+    shellIntegration: true,
+    webgl: false,
+  },
   profiles: [],
   defaultProfileId: '',
   restoreSession: true,
@@ -63,6 +81,13 @@ const SCROLLBACK_MAX = 1_000_000;
 const STARTUP_COMMAND_MAX = 2000;
 const MAX_COMMANDS = 20; // cap a profile's startup/restore sequence so a crafted config can't queue thousands
 const CURSOR_STYLES = ['block', 'bar', 'underline'] as const;
+const CURSOR_INACTIVE_STYLES = ['outline', 'block', 'bar', 'underline', 'none'] as const;
+const LINE_HEIGHT_MIN = 1.0;
+const LINE_HEIGHT_MAX = 2.0;
+const LETTER_SPACING_MIN = -5;
+const LETTER_SPACING_MAX = 10;
+const FONT_WEIGHT_MIN = 100;
+const FONT_WEIGHT_MAX = 900;
 
 // One profile command: keep only the first line (an embedded newline would inject an extra command
 // into the pty) and bound its length. Returns '' for anything unusable.
@@ -97,6 +122,10 @@ const int = (v: unknown, fallback: number, min: number, max: number): number =>
 
 const oneOf = <T extends string>(v: unknown, options: readonly T[], fallback: T): T =>
   typeof v === 'string' && (options as readonly string[]).includes(v) ? (v as T) : fallback;
+
+// Coerce a font weight onto the CSS 100–900 scale, snapped to the nearest 100 (xterm/CSS steps).
+const weight = (v: unknown, fallback: number): number =>
+  Math.round(num(v, fallback, FONT_WEIGHT_MIN, FONT_WEIGHT_MAX) / 100) * 100;
 
 // Coerce one entry of `profiles`. Returns null for anything that isn't a well-formed profile (so
 // it can be filtered out). Builds a fresh object, so unknown keys are dropped.
@@ -144,7 +173,11 @@ export function normalize(input: unknown): Settings {
     terminal: {
       scrollback: int(terminal.scrollback, DEFAULTS.terminal.scrollback, SCROLLBACK_MIN, SCROLLBACK_MAX),
       cursorStyle: oneOf(terminal.cursorStyle, CURSOR_STYLES, DEFAULTS.terminal.cursorStyle),
+      cursorInactiveStyle: oneOf(terminal.cursorInactiveStyle, CURSOR_INACTIVE_STYLES, DEFAULTS.terminal.cursorInactiveStyle),
       cursorBlink: bool(terminal.cursorBlink, DEFAULTS.terminal.cursorBlink),
+      lineHeight: num(terminal.lineHeight, DEFAULTS.terminal.lineHeight, LINE_HEIGHT_MIN, LINE_HEIGHT_MAX),
+      letterSpacing: num(terminal.letterSpacing, DEFAULTS.terminal.letterSpacing, LETTER_SPACING_MIN, LETTER_SPACING_MAX),
+      fontWeight: weight(terminal.fontWeight, DEFAULTS.terminal.fontWeight),
       shellIntegration: bool(terminal.shellIntegration, DEFAULTS.terminal.shellIntegration),
       webgl: bool(terminal.webgl, DEFAULTS.terminal.webgl),
     },

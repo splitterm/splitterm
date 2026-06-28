@@ -1,4 +1,4 @@
-import { Terminal } from '@xterm/xterm';
+import { Terminal, type FontWeight } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import '@xterm/xterm/css/xterm.css';
@@ -49,6 +49,10 @@ export async function createTerminal(
     scrollback: s.terminal.scrollback,
     cursorBlink: s.terminal.cursorBlink,
     cursorStyle: s.terminal.cursorStyle,
+    cursorInactiveStyle: s.terminal.cursorInactiveStyle,
+    lineHeight: s.terminal.lineHeight,
+    letterSpacing: s.terminal.letterSpacing,
+    fontWeight: s.terminal.fontWeight as FontWeight,
     fontFamily: s.font.family,
     fontSize: s.font.size,
     theme: readTerminalTheme(),
@@ -172,7 +176,11 @@ export async function createTerminal(
       term.options.fontSize = next.font.size;
       term.options.scrollback = next.terminal.scrollback;
       term.options.cursorStyle = next.terminal.cursorStyle;
+      term.options.cursorInactiveStyle = next.terminal.cursorInactiveStyle;
       term.options.cursorBlink = next.terminal.cursorBlink;
+      term.options.lineHeight = next.terminal.lineHeight;
+      term.options.letterSpacing = next.terminal.letterSpacing;
+      term.options.fontWeight = next.terminal.fontWeight as FontWeight;
       term.options.theme = readTerminalTheme(); // re-read CSS vars (theme may have changed)
       search.reapply(); // recolor live search highlights if the bar is open
       refit();
