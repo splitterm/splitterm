@@ -77,13 +77,15 @@ try {
     if ((await countPanesMatching(/PS C:\\Windows/)) >= 1) break;
     await sleep(300);
   }
+  await sleep(500);
   await win.keyboard.press('Alt+Shift+Equal');
   await sleep(1500);
   result.paneCount = await win.locator('[data-leaf-id]').count();
 
   // Only the pane that actually cd'd shows the C:\Windows prompt; the split fell back to the spawn
-  // dir (home). With the shim on this would be 2.
-  await sleep(1500);
+  // dir (home). With the shim on this would be 2. Wait generously so a slow second-pane spawn can't
+  // make this look like "1" before its (home) prompt even renders.
+  await sleep(3000);
   result.panesInWindows = await countPanesMatching(/PS C:\\Windows/);
 
   const ok = result.defaultOn && result.persistedOff && result.paneCount === 2 && result.panesInWindows === 1;

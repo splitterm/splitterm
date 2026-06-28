@@ -79,6 +79,7 @@ function scheduleRestart(): void {
   if (rapidRestarts > MAX_RAPID_RESTARTS) {
     console.error('[pty-supervisor] pty-host keeps crashing on startup; giving up until app restart.');
     gaveUp = true; // new spawns now get hostDown so the pane banners instead of hanging
+    pendingSpawns.length = 0; // buffered spawns will never replay now — drop them (already banner'd via failAll)
     return;
   }
   const delay = Math.min(2000, 250 * rapidRestarts);

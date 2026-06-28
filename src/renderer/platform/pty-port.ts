@@ -102,9 +102,13 @@ function flush(): void {
   rafScheduled = false;
   for (const [id, buf] of pending) {
     const handler = handlers.get(id);
-    // Keep buffering (data AND a pending exit) until the terminal registers — avoids dropping early
-    // output, or delivering an exit the pane never sees.
-    if (!handler) continue;
+    if (!handler) {
+      // No handler: a buffered exit means the pane is already gone (its kill's exit arrived after
+      // unregister re-created the entry) — reap it so closed terminals don't leak. Plain early data
+      // with no exit stays buffered until the terminal registers.
+      if (buf.exit !== undefined) pending.delete(id);
+      continue;
+    }
     if (buf.chunks.length > 0) {
       handler.onData(buf.chunks.join(''));
       buf.chunks = [];

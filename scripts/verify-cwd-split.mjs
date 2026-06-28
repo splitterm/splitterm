@@ -66,6 +66,7 @@ try {
     await sleep(300);
   }
   result.firstPaneInWindows = (await countPanesMatching(/PS C:\\Windows/)) >= 1;
+  await sleep(500); // let the OSC 7 for the new cwd be fully processed before splitting
 
   // Split — the new pane should inherit the tracked cwd (C:\Windows).
   await win.keyboard.press('Alt+Shift+Equal');
@@ -73,9 +74,10 @@ try {
   result.paneCount = await win.locator('[data-leaf-id]').count();
 
   // Both panes show the "PS C:\Windows>" prompt (the typed `cd` command has no "PS " prefix, so it
-  // can't false-match). If the split fell back to home, only the first pane would match.
+  // can't false-match). If the split fell back to home, only the first pane would match. Generous
+  // retry: spawning PowerShell + its first prompt can be slow when the e2e suite runs under load.
   let both = 0;
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < 40; i++) {
     both = await countPanesMatching(/PS C:\\Windows/);
     if (both >= 2) break;
     await sleep(300);
