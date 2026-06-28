@@ -47,7 +47,8 @@ export function createProfilesSection(initial: Settings, shells: ShellProfile[])
   help.className = 'text-[11px] leading-snug text-[var(--text-disabled)]';
   help.textContent =
     'Each profile appears in the new-terminal ▾ menu. Startup commands run on a fresh terminal; ' +
-    'restore commands run instead when the session reopens — e.g. startup "claude", restore "claude --continue".';
+    'restore commands run instead when the session reopens — e.g. startup "claude", restore "claude --continue". ' +
+    'If a command opens an interactive program (like claude), put it last — anything after it is typed into that program.';
 
   const list = document.createElement('div');
   list.className = 'flex flex-col gap-1';
