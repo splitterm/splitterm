@@ -106,6 +106,8 @@ export async function createTerminal(profileId?: string, title = '', initialCwd?
   // rAF-coalesce fits so a gutter drag (many size observations/sec) refits at most once per frame
   // instead of thrashing the expensive FitAddon.fit() + a PTY resize on every observation.
   let fitScheduled = false;
+  let lastCols = 0;
+  let lastRows = 0;
   const refit = (): void => {
     if (fitScheduled) return;
     fitScheduled = true;
@@ -113,7 +115,15 @@ export async function createTerminal(profileId?: string, title = '', initialCwd?
       fitScheduled = false;
       if (el.isConnected && el.clientWidth > 0 && el.clientHeight > 0) {
         fit.fit();
-        resizePty(id, term.cols, term.rows);
+        // Only resize the PTY when the grid actually changed. fit() already no-ops on unchanged dims,
+        // but refitAll() fans this over every pane on each layout op and a gutter drag fires the
+        // observer ~60×/s — without this guard each would post a redundant cross-process resize +
+        // ConPTY ResizePseudoConsole syscall (and a spurious SIGWINCH that makes TUIs repaint).
+        if (term.cols !== lastCols || term.rows !== lastRows) {
+          lastCols = term.cols;
+          lastRows = term.rows;
+          resizePty(id, term.cols, term.rows);
+        }
       }
     });
   };

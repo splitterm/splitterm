@@ -46,19 +46,21 @@ const topbar = createTopbar({
   onOpenSettings: () => settingsModal.open(),
 });
 
-// The "+" opens the configured default profile. Resolve its display name here so the new pane is
-// titled with it (the host independently falls back to the same default if no profileId is passed,
-// so launching still works even before this resolves).
+// The "+" opens the configured default profile, titled with its display name. When no default
+// profile is set (the common case), there's no label to resolve, so spawn immediately rather than
+// awaiting shell-profile detection — that can shell out to `wsl.exe` on Windows and would otherwise
+// block the first terminal for seconds. Only when a default profile IS set do we await profiles() to
+// resolve its name (and detection is usually already done by the time the user clicks).
 async function openDefaultTerminal(): Promise<void> {
-  const [detected, settings] = await Promise.all([
-    ipc.pty.profiles().catch(() => []),
-    ipc.settings.get().catch(() => null),
-  ]);
-  const id = settings?.defaultProfileId ?? '';
-  const label = id
-    ? (detected.find((d) => d.id === id)?.label ?? settings?.profiles.find((p) => p.id === id)?.name ?? '')
-    : '';
-  await tiling?.addTerminal(id || undefined, label);
+  const settings = getSettings();
+  const id = settings.defaultProfileId;
+  if (!id) {
+    await tiling?.addTerminal(undefined, '');
+    return;
+  }
+  const detected = await ipc.pty.profiles().catch(() => []);
+  const label = detected.find((d) => d.id === id)?.label ?? settings.profiles.find((p) => p.id === id)?.name ?? '';
+  await tiling?.addTerminal(id, label);
 }
 
 body.append(sidebar.panel, tilingHost); // column 1 = sidebar, column 2 = tiles
