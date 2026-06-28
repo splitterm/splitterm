@@ -122,7 +122,7 @@ export interface SessionV1 {
   root: LayoutNode | null;
   focusedLeafId: string | null;
   maximizedId: string | null;
-  leaves: Record<string, { cwd?: string; profileId?: string; title?: string }>;
+  leaves: Record<string, { cwd?: string; profileId?: string; title?: string; scrollback?: string }>;
 }
 
 export const EMPTY_SESSION: SessionV1 = { v: 1, root: null, focusedLeafId: null, maximizedId: null, leaves: {} };
@@ -133,6 +133,11 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 // A generous ceiling on restored panes: a real layout never approaches it, but it stops a crafted
 // session.json from making the next launch spawn thousands of shells.
 const MAX_LEAVES = 100;
+
+// Per-pane serialized scrollback cap. Capture (terminal/index.ts) shrinks to fit this same bound, so
+// a self-produced entry is never lost here; a blob over this (a crafted/corrupt file) is DROPPED
+// rather than truncated — slicing mid-escape-sequence would replay as garbage.
+export const MAX_SCROLLBACK_CHARS = 1_000_000;
 
 // Coerce one persisted node. Returns null for anything malformed so the caller can drop the tree.
 // `seen` enforces unique leaf ids (duplicates would corrupt focus/close bookkeeping) and, via its
@@ -187,6 +192,8 @@ export function normalizeSession(input: unknown): SessionV1 {
       if (typeof v.cwd === 'string') entry.cwd = v.cwd.slice(0, 4096);
       if (typeof v.profileId === 'string') entry.profileId = v.profileId.slice(0, 200);
       if (typeof v.title === 'string') entry.title = v.title.slice(0, 500);
+      // Replayed verbatim into a terminal, so keep it whole or not at all (no mid-sequence slice).
+      if (typeof v.scrollback === 'string' && v.scrollback.length <= MAX_SCROLLBACK_CHARS) entry.scrollback = v.scrollback;
       leaves[k] = entry;
     }
   }

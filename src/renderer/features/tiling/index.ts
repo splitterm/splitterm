@@ -4,6 +4,7 @@
 import { X, GripVertical, Terminal as TerminalIcon } from 'lucide';
 import { createTerminal } from '@features/terminal';
 import { getPane } from '@platform/pane-registry';
+import { getSettings } from '@platform/settings-controller';
 import { icon } from '../../chrome/icons';
 import {
   type LayoutNode,
@@ -665,6 +666,7 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   // ---- session restore ----------------------------------------------------
 
   function serialize(): SessionV1 {
+    const captureScrollback = getSettings().restoreScrollback; // opt-in: persists terminal output
     const leaves: SessionV1['leaves'] = {};
     if (root) {
       for (const lf of collectLeaves(root)) {
@@ -674,6 +676,10 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
         if (cwd) entry.cwd = cwd;
         if (pane?.profileId) entry.profileId = pane.profileId;
         if (pane?.title) entry.title = pane.title;
+        if (captureScrollback) {
+          const sb = pane?.serialize();
+          if (sb) entry.scrollback = sb;
+        }
         leaves[lf.id] = entry;
       }
     }
@@ -707,7 +713,8 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     const settled = await Promise.allSettled(
       sessionLeaves.map(async (ln) => {
         const meta = session.leaves[ln.id] ?? {};
-        const { termId } = await createTerminal(meta.profileId, meta.title ?? '', meta.cwd, true); // restore → profile's restore sequence
+        // restore → profile's restore sequence; replay saved scrollback as read-only history
+        const { termId } = await createTerminal(meta.profileId, meta.title ?? '', meta.cwd, true, meta.scrollback);
         created.push({ id: ln.id, termId }); // track the moment it exists, for cleanup
       }),
     );

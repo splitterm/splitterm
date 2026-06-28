@@ -16,6 +16,15 @@ export function createGeneralSection(initial: Settings): HTMLElement {
       }),
       'Reopen the previous window layout (with fresh shells) when the app launches.',
     ),
+    row(
+      'Restore terminal history',
+      toggle({
+        checked: initial.restoreScrollback,
+        onChange: (v) => void ipc.settings.set({ restoreScrollback: v }),
+      }),
+      'Also replay each terminal’s recent output as read-only history on restore. Saves that output ' +
+        'to disk (it may contain secrets), so it’s off by default. Needs “Restore previous session”.',
+    ),
   );
   return el;
 }

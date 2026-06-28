@@ -44,6 +44,7 @@ describe('normalize', () => {
       profiles: [{ id: 'p1', name: 'Claude', baseShellId: 'pwsh', startupCommands: ['claude'], restoreCommands: ['claude --continue'] }],
       defaultProfileId: 'p1',
       restoreSession: false,
+      restoreScrollback: true,
     };
     expect(normalize(valid)).toEqual(valid);
   });
@@ -62,6 +63,13 @@ describe('normalize', () => {
     it('keeps a boolean', () => expect(normalize({ restoreSession: false }).restoreSession).toBe(false));
     it.each([1, 'yes', null, {}])('falls back to default for non-boolean %p', (restoreSession) =>
       expect(normalize({ restoreSession }).restoreSession).toBe(true));
+  });
+
+  describe('restoreScrollback', () => {
+    it('defaults to false (opt-in)', () => expect(normalize({}).restoreScrollback).toBe(false));
+    it('keeps a boolean', () => expect(normalize({ restoreScrollback: true }).restoreScrollback).toBe(true));
+    it.each([1, 'yes', null, {}])('falls back to default for non-boolean %p', (restoreScrollback) =>
+      expect(normalize({ restoreScrollback }).restoreScrollback).toBe(false));
   });
 
   it('is idempotent', () => {
@@ -86,6 +94,7 @@ describe('normalize', () => {
       'defaultProfileId',
       'font',
       'profiles',
+      'restoreScrollback',
       'restoreSession',
       'schemaVersion',
       'terminal',

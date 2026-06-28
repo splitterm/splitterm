@@ -1,5 +1,6 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { SerializeAddon } from '@xterm/addon-serialize';
 import '@xterm/xterm/css/xterm.css';
 import type { TermId } from '@shared/ids';
 import { ipc } from '@platform/ipc-client';
@@ -11,6 +12,7 @@ import { createTerminalSearch } from './search';
 import { createTerminalClipboard } from './clipboard';
 import { parseOsc7 } from './osc7';
 import { tryAttachWebgl } from './webgl';
+import { MAX_SCROLLBACK_CHARS } from '@shared/domain/layout-tree';
 
 export interface TerminalInstance {
   termId: TermId;
@@ -23,7 +25,17 @@ export interface TerminalInstance {
  * The element starts detached; the tiling engine appends it to a cell, at which point the
  * ResizeObserver fits it to the real size. M2 uses the DOM renderer; WebGL pooling lands in M2b.
  */
-export async function createTerminal(profileId?: string, title = '', initialCwd?: string, restore = false): Promise<TerminalInstance> {
+// How many scrollback rows to capture per pane for session-restore history — bounds session.json
+// (the trust boundary also caps the stored string).
+const SERIALIZE_SCROLLBACK = 1000;
+
+export async function createTerminal(
+  profileId?: string,
+  title = '',
+  initialCwd?: string,
+  restore = false,
+  replay?: string,
+): Promise<TerminalInstance> {
   const el = document.createElement('div');
   el.className = 'term-pane';
 
@@ -43,6 +55,21 @@ export async function createTerminal(profileId?: string, title = '', initialCwd?
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
+  const serializeAddon = new SerializeAddon();
+  term.loadAddon(serializeAddon);
+
+  // Replay saved scrollback (session restore) as read-only history. Written BEFORE open() per the
+  // addon-serialize guidance (avoids rendering incomplete frames). `term.write` parses ASYNCHRONOUSLY,
+  // so we can't rely on registration order to keep replayed escape sequences from reaching app
+  // handlers — instead `replaying` gates the OSC 7 handler below until the write callback fires (after
+  // the replay is fully parsed). No separator is written: it would be re-captured on the next save and
+  // stack across restarts; the bounded history simply flows into the fresh shell (tmux-style).
+  let replaying = !!replay;
+  if (replay) {
+    term.write(replay, () => {
+      replaying = false;
+    });
+  }
   term.open(el);
 
   // GPU renderer (opt-in). Must load AFTER open() — it needs the live canvas. Returns null and stays
@@ -51,8 +78,11 @@ export async function createTerminal(profileId?: string, title = '', initialCwd?
   // Tracked so the pane releases its context on close.
   const webgl = s.terminal.webgl ? tryAttachWebgl(term) : null;
 
-  // Track the cwd the shell reports via OSC 7 (`ESC ]7;file://host/path BEL`).
+  // Track the cwd the shell reports via OSC 7 (`ESC ]7;file://host/path BEL`). Ignore any OSC 7 that
+  // arrives while the saved scrollback is still being parsed — replayed (untrusted) content must not
+  // drive app logic; only the live shell's reports should move the cwd.
   const osc7 = term.parser.registerOscHandler(7, (data) => {
+    if (replaying) return true; // swallow replayed OSC 7 (do nothing) until the replay is consumed
     const dir = parseOsc7(data);
     if (dir) cwd = dir;
     return true;
@@ -146,6 +176,25 @@ export async function createTerminal(profileId?: string, title = '', initialCwd?
       term.options.theme = readTerminalTheme(); // re-read CSS vars (theme may have changed)
       search.reapply(); // recolor live search highlights if the bar is open
       refit();
+    },
+    // Capture the buffer for session-restore history. Total — never throws into the caller.
+    // `excludeAltBuffer` keeps a full-screen TUI (vim/htop) open at save time from capturing its dead
+    // alt-screen (which would leave the restored pane stuck there) — we want the real scrollback.
+    // `excludeModes` keeps live terminal modes (mouse tracking, app cursor keys) out of the replay so
+    // they can't corrupt input to the fresh shell. Shrink to fit the storage cap so a self-produced
+    // capture is never silently dropped on read (rather than persisting a blob that gets rejected).
+    serialize: () => {
+      try {
+        let lines = SERIALIZE_SCROLLBACK;
+        let out = serializeAddon.serialize({ scrollback: lines, excludeAltBuffer: true, excludeModes: true });
+        while (out.length > MAX_SCROLLBACK_CHARS && lines > 0) {
+          lines = Math.floor(lines / 2);
+          out = serializeAddon.serialize({ scrollback: lines, excludeAltBuffer: true, excludeModes: true });
+        }
+        return out.length <= MAX_SCROLLBACK_CHARS ? out : '';
+      } catch {
+        return '';
+      }
     },
     dispose: () => {
       observer.disconnect();

@@ -220,6 +220,17 @@ describe('normalizeSession', () => {
     expect(s.leaves.b).toBeUndefined();
   });
 
+  it('keeps a string scrollback but drops an oversized or non-string one', () => {
+    expect(normalizeSession({ v: 1, root: L('a'), leaves: { a: { scrollback: 'hi\x1b[0m' } } }).leaves.a).toEqual({
+      scrollback: 'hi\x1b[0m',
+    });
+    // Over the 1,000,000-char cap → dropped whole (never sliced mid-escape-sequence).
+    expect(normalizeSession({ v: 1, root: L('a'), leaves: { a: { scrollback: 'x'.repeat(1_000_001) } } }).leaves.a).toEqual(
+      {},
+    );
+    expect(normalizeSession({ v: 1, root: L('a'), leaves: { a: { scrollback: 123 } } }).leaves.a).toEqual({});
+  });
+
   it('drops a tree with duplicate leaf ids (would corrupt focus/close bookkeeping)', () => {
     const dup = { type: 'split', dir: 'row', children: [L('a'), L('a')], ratios: [0.5, 0.5] };
     expect(normalizeSession({ v: 1, root: dup }).root).toBeNull();

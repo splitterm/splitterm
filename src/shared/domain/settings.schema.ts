@@ -35,6 +35,12 @@ export interface Settings {
   defaultProfileId: string;
   /** reopen the previous window layout (fresh shells) on launch */
   restoreSession: boolean;
+  /**
+   * also save & replay each terminal's recent output as read-only history on restore. Opt-in
+   * (default off) because it writes terminal output — which may include secrets — to session.json.
+   * Only has an effect while restoreSession is on.
+   */
+  restoreScrollback: boolean;
 }
 
 export const DEFAULTS: Settings = {
@@ -45,6 +51,7 @@ export const DEFAULTS: Settings = {
   profiles: [],
   defaultProfileId: '',
   restoreSession: true,
+  restoreScrollback: false,
 };
 
 // Clamp ranges for numeric fields. Bounds are defensive — wide enough to honor any sane user value,
@@ -148,5 +155,6 @@ export function normalize(input: unknown): Settings {
     // bounded so a garbage value can't bloat the file.
     defaultProfileId: typeof root.defaultProfileId === 'string' ? root.defaultProfileId.slice(0, 200) : '',
     restoreSession: bool(root.restoreSession, DEFAULTS.restoreSession),
+    restoreScrollback: bool(root.restoreScrollback, DEFAULTS.restoreScrollback),
   };
 }

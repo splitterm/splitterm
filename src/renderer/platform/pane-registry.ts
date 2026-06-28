@@ -17,6 +17,8 @@ export interface PaneHandle {
   cwd(): string | undefined;
   /** re-apply live settings (font / cursor / scrollback + theme) to the terminal */
   applySettings(settings: Settings): void;
+  /** serialize the buffer (capped) to a replayable string, for session-restore history; '' if empty */
+  serialize(): string;
   dispose(): void;
 }
 
