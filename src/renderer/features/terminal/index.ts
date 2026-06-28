@@ -145,7 +145,9 @@ export async function createTerminal(
     const next = t.trim().slice(0, 256);
     if (next === oscTitle) return;
     oscTitle = next;
-    notifyPaneTitleChange(id);
+    // A named pane shows its profile title regardless of the OSC title, so changing oscTitle can't
+    // change what's displayed — don't notify (avoids re-render churn from a title-spamming shell).
+    if (!title) notifyPaneTitleChange(id);
   });
 
   // rAF-coalesce fits so a gutter drag (many size observations/sec) refits at most once per frame

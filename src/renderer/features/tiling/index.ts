@@ -34,6 +34,13 @@ export interface PaneInfo {
   focused: boolean;
 }
 
+/**
+ * Why the open-terminals list changed. 'structural' = a pane was added/removed/moved/focused (the
+ * layout changed → persist it). 'title' = only a pane's live display title changed (cosmetic — the
+ * sidebar should refresh, but it must NOT trigger a session save, since the title isn't persisted).
+ */
+export type ChangeReason = 'structural' | 'title';
+
 export interface Tiling {
   /** Add a terminal by splitting the largest pane (even tiling). */
   addTerminal(profileId?: string, title?: string): Promise<void>;
@@ -44,7 +51,7 @@ export interface Tiling {
   /** Close a specific pane (e.g. from the Sessions sidebar). */
   closePane(leafId: string): void;
   /** Subscribe to the open-terminals list; fires immediately with the current snapshot. */
-  onChange(cb: (panes: PaneInfo[]) => void): () => void;
+  onChange(cb: (panes: PaneInfo[], reason: ChangeReason) => void): () => void;
   /** Snapshot the layout (tree + per-pane cwd/profile/title) for persistence. */
   serialize(): SessionV1;
   /** Rebuild a saved layout, spawning a fresh terminal per leaf. No-op unless currently empty. */
@@ -61,7 +68,7 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   let lastAdd = 0;
   let lastRemove = 0;
   const order: string[] = []; // leaf ids in creation order (existing leaves only)
-  const listeners: Array<(panes: PaneInfo[]) => void> = [];
+  const listeners: Array<(panes: PaneInfo[], reason: ChangeReason) => void> = [];
 
   // The open-terminals snapshot (creation order), for the Sessions sidebar.
   function snapshot(): PaneInfo[] {
@@ -74,9 +81,9 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     }
     return out;
   }
-  function emit(): void {
+  function emit(reason: ChangeReason = 'structural'): void {
     const s = snapshot();
-    for (const l of listeners) l(s);
+    for (const l of listeners) l(s, reason);
   }
 
   // Honor BOTH the OS preference and the in-app "Reduce motion" toggle (settings-controller sets
@@ -770,10 +777,17 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   // ---- lifecycle ----------------------------------------------------------
 
   window.addEventListener('keydown', onKeydown, { capture: true });
-  // Refresh the chip + Sessions sidebar live when a pane's shell reports a new title.
+  // Refresh the chip (immediately) + Sessions sidebar (coalesced to one frame, so a title-spamming
+  // shell can't thrash the sidebar rebuild) when a pane's shell reports a new title. The 'title'
+  // reason keeps this off the persistence path — the live title isn't saved.
+  let titleRaf = 0;
   const unsubscribeTitles = onPaneTitleChange((id) => {
     updateTitleChip(id);
-    emit();
+    if (titleRaf) return;
+    titleRaf = requestAnimationFrame(() => {
+      titleRaf = 0;
+      emit('title');
+    });
   });
   render(); // start empty — the first terminal opens on the first "+" (or Alt+Shift+= / -)
 
@@ -788,7 +802,7 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     },
     onChange(cb) {
       listeners.push(cb);
-      cb(snapshot());
+      cb(snapshot(), 'structural');
       return () => {
         const i = listeners.indexOf(cb);
         if (i >= 0) listeners.splice(i, 1);
@@ -799,6 +813,7 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     dispose() {
       window.removeEventListener('keydown', onKeydown, { capture: true });
       unsubscribeTitles();
+      if (titleRaf) cancelAnimationFrame(titleRaf);
       if (root) for (const lf of collectLeaves(root)) getPane(lf.termId)?.dispose();
       container.replaceChildren();
     },

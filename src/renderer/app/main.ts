@@ -122,7 +122,11 @@ initSettings()
       clearTimeout(saveTimer);
       saveTimer = setTimeout(persist, 400);
     };
-    tiling.onChange(scheduleSave);
+    // Persist on structural changes only — a live OSC title change ('title') refreshes the sidebar
+    // but isn't part of the saved session, so it must not drive saves (or per-pane scrollback serialize).
+    tiling.onChange((_list, reason) => {
+      if (reason !== 'title') scheduleSave();
+    });
     window.addEventListener('pagehide', persist); // final save on unload (close/reload)
 
     const status = document.getElementById('shell-status');
