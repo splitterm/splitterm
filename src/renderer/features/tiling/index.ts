@@ -686,41 +686,53 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     // the saved leaf ids so the saved focused/maximized references stay valid. Track what we spawn so
     // a mid-build spawn failure — or the user opening a terminal during the async window — can be
     // cleaned up instead of leaking a pty or clobbering the user's pane.
-    const spawned: LeafNode[] = [];
-    async function build(node: LayoutNode): Promise<LayoutNode> {
-      if (node.type === 'leaf') {
-        const meta = session.leaves[node.id] ?? {};
-        const { termId } = await createTerminal(meta.profileId, meta.title ?? '', meta.cwd, true); // restore → profile's restore sequence
-        order.push(node.id);
-        const n = parseInt(node.id.replace(/^leaf-/, ''), 10);
-        if (Number.isFinite(n) && n > leafSeq) leafSeq = n; // keep future leaf ids from colliding
-        const lf: LeafNode = { type: 'leaf', id: node.id, termId };
-        spawned.push(lf);
-        return lf;
-      }
-      const children: LayoutNode[] = [];
-      for (const c of node.children) children.push(await build(c));
-      return { type: 'split', dir: node.dir, children, ratios: node.ratios };
-    }
+    // Spawn every saved leaf CONCURRENTLY (their spawn round-trips + xterm constructions overlap)
+    // rather than one-at-a-time, then assemble the tree from the resolved terminals. Track each
+    // terminal as it resolves so a mid-build spawn failure — or the user opening a terminal during the
+    // async window — can dispose them instead of leaking a pty.
+    const sessionLeaves = collectLeaves(session.root); // document order = stable creation order
+    const created: Array<{ id: string; termId: LeafNode['termId'] }> = [];
     const discard = (): void => {
-      for (const lf of spawned) {
-        const oi = order.indexOf(lf.id);
+      for (const c of created) {
+        const oi = order.indexOf(c.id);
         if (oi >= 0) order.splice(oi, 1);
-        getPane(lf.termId)?.dispose();
+        getPane(c.termId)?.dispose();
       }
     };
 
-    let built: LayoutNode;
-    try {
-      built = await build(session.root);
-    } catch {
-      discard(); // a spawn failed partway — drop the half-built panes, leave the tiling empty
+    // allSettled, not all: if one spawn rejects, its siblings are still in flight. We must let them
+    // ALL settle so created[] is complete before discard() runs — otherwise a late-resolving spawn
+    // would register a live pty AFTER cleanup and leak it. (Today the spawn path resolves even on host
+    // failure — it returns hostDown rather than throwing — but restore's cleanup must not depend on that.)
+    const settled = await Promise.allSettled(
+      sessionLeaves.map(async (ln) => {
+        const meta = session.leaves[ln.id] ?? {};
+        const { termId } = await createTerminal(meta.profileId, meta.title ?? '', meta.cwd, true); // restore → profile's restore sequence
+        created.push({ id: ln.id, termId }); // track the moment it exists, for cleanup
+      }),
+    );
+    if (settled.some((s) => s.status === 'rejected')) {
+      discard(); // a spawn failed — drop whatever was created, leave the tiling empty
       return;
     }
     if (root) {
       discard(); // the user opened a terminal while we were spawning — let theirs win, drop ours
       return;
     }
+
+    // Commit: record creation order + keep future leaf ids from colliding, then build the tree from
+    // the resolved term ids (the saved structure is reused verbatim — same leaf ids, ratios, dirs).
+    const termById = new Map(created.map((c) => [c.id, c.termId]));
+    for (const ln of sessionLeaves) {
+      order.push(ln.id);
+      const n = parseInt(ln.id.replace(/^leaf-/, ''), 10);
+      if (Number.isFinite(n) && n > leafSeq) leafSeq = n;
+    }
+    const assemble = (node: LayoutNode): LayoutNode =>
+      node.type === 'leaf'
+        ? { type: 'leaf', id: node.id, termId: termById.get(node.id)! }
+        : { type: 'split', dir: node.dir, children: node.children.map(assemble), ratios: node.ratios };
+    const built = assemble(session.root);
 
     root = built;
     maximizedId = session.maximizedId && findLeaf(built, session.maximizedId) ? session.maximizedId : null;
