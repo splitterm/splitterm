@@ -40,7 +40,17 @@ describe('normalize', () => {
       schemaVersion: 1,
       appearance: { theme: 'Light', followOS: false, reduceMotion: true },
       font: { family: 'Fira Code', size: 16 },
-      terminal: { scrollback: 5000, cursorStyle: 'bar' as const, cursorBlink: false, shellIntegration: false, webgl: true },
+      terminal: {
+        scrollback: 5000,
+        cursorStyle: 'bar' as const,
+        cursorInactiveStyle: 'none' as const,
+        cursorBlink: false,
+        lineHeight: 1.4,
+        letterSpacing: 1,
+        fontWeight: 500,
+        shellIntegration: false,
+        webgl: true,
+      },
       profiles: [{ id: 'p1', name: 'Claude', baseShellId: 'pwsh', startupCommands: ['claude'], restoreCommands: ['claude --continue'] }],
       defaultProfileId: 'p1',
       restoreSession: false,
@@ -131,6 +141,32 @@ describe('normalize', () => {
       expect(normalize({ terminal: { cursorStyle } }).terminal.cursorStyle).toBe(cursorStyle));
     it('falls back for an unknown style', () =>
       expect(normalize({ terminal: { cursorStyle: 'beam' } }).terminal.cursorStyle).toBe(DEFAULTS.terminal.cursorStyle));
+  });
+
+  describe('terminal display (lineHeight / letterSpacing / fontWeight / cursorInactiveStyle)', () => {
+    it('clamps lineHeight to [1, 2]', () => {
+      expect(normalize({ terminal: { lineHeight: 0.2 } }).terminal.lineHeight).toBe(1);
+      expect(normalize({ terminal: { lineHeight: 5 } }).terminal.lineHeight).toBe(2);
+      expect(normalize({ terminal: { lineHeight: 1.4 } }).terminal.lineHeight).toBe(1.4);
+    });
+    it('clamps letterSpacing to [-5, 10] and falls back for non-numbers', () => {
+      expect(normalize({ terminal: { letterSpacing: 99 } }).terminal.letterSpacing).toBe(10);
+      expect(normalize({ terminal: { letterSpacing: -99 } }).terminal.letterSpacing).toBe(-5);
+      expect(normalize({ terminal: { letterSpacing: 'x' } }).terminal.letterSpacing).toBe(DEFAULTS.terminal.letterSpacing);
+    });
+    it('snaps fontWeight to the nearest 100 within [100, 900]', () => {
+      expect(normalize({ terminal: { fontWeight: 540 } }).terminal.fontWeight).toBe(500);
+      expect(normalize({ terminal: { fontWeight: 560 } }).terminal.fontWeight).toBe(600);
+      expect(normalize({ terminal: { fontWeight: 50 } }).terminal.fontWeight).toBe(100);
+      expect(normalize({ terminal: { fontWeight: 9999 } }).terminal.fontWeight).toBe(900);
+      expect(normalize({ terminal: { fontWeight: 'bold' } }).terminal.fontWeight).toBe(DEFAULTS.terminal.fontWeight);
+    });
+    it('accepts known cursorInactiveStyle values and falls back otherwise', () => {
+      expect(normalize({ terminal: { cursorInactiveStyle: 'none' } }).terminal.cursorInactiveStyle).toBe('none');
+      expect(normalize({ terminal: { cursorInactiveStyle: 'spiral' } }).terminal.cursorInactiveStyle).toBe(
+        DEFAULTS.terminal.cursorInactiveStyle,
+      );
+    });
   });
 
   describe('booleans', () => {

@@ -5,6 +5,7 @@ import type { Settings } from '@shared/domain/settings.schema';
 import { numberControl, row, sectionHeading, selectControl, textControl, toggle } from './controls';
 
 type CursorStyle = Settings['terminal']['cursorStyle'];
+type InactiveCursorStyle = Settings['terminal']['cursorInactiveStyle'];
 
 export function createTerminalSection(initial: Settings): HTMLElement {
   const local = structuredClone(initial);
@@ -40,6 +41,51 @@ export function createTerminalSection(initial: Settings): HTMLElement {
         },
       }),
     ),
+    row(
+      'Font weight',
+      selectControl({
+        value: String(local.terminal.fontWeight),
+        options: [
+          { value: '300', label: 'Light' },
+          { value: '400', label: 'Normal' },
+          { value: '500', label: 'Medium' },
+          { value: '600', label: 'Semibold' },
+          { value: '700', label: 'Bold' },
+        ],
+        onChange: (v) => {
+          local.terminal.fontWeight = Number(v);
+          saveTerm();
+        },
+      }),
+    ),
+    row(
+      'Line height',
+      numberControl({
+        value: local.terminal.lineHeight,
+        min: 1,
+        max: 2,
+        step: 0.1,
+        onChange: (v) => {
+          local.terminal.lineHeight = v;
+          saveTerm();
+        },
+      }),
+      'Multiple of the font size (1.0 = tight).',
+    ),
+    row(
+      'Letter spacing',
+      numberControl({
+        value: local.terminal.letterSpacing,
+        min: -5,
+        max: 10,
+        step: 0.5,
+        onChange: (v) => {
+          local.terminal.letterSpacing = v;
+          saveTerm();
+        },
+      }),
+      'Extra horizontal space between cells, in pixels.',
+    ),
     sectionHeading('Cursor'),
     row(
       'Cursor style',
@@ -65,6 +111,24 @@ export function createTerminalSection(initial: Settings): HTMLElement {
           saveTerm();
         },
       }),
+    ),
+    row(
+      'Inactive cursor',
+      selectControl({
+        value: local.terminal.cursorInactiveStyle,
+        options: [
+          { value: 'outline', label: 'Outline' },
+          { value: 'block', label: 'Block' },
+          { value: 'bar', label: 'Bar' },
+          { value: 'underline', label: 'Underline' },
+          { value: 'none', label: 'Hidden' },
+        ],
+        onChange: (v) => {
+          local.terminal.cursorInactiveStyle = v as InactiveCursorStyle;
+          saveTerm();
+        },
+      }),
+      'How the cursor looks when the pane is not focused.',
     ),
     sectionHeading('Buffer'),
     row(
