@@ -21,6 +21,7 @@ import {
   moveLeaf,
 } from '@shared/domain/layout-tree';
 import { pickZone, zoneToSplit, type Zone } from './drop-zone';
+import { chordFromEvent, matchAction } from '@shared/domain/keymap';
 
 const GUTTER = 6; // px — transparent gap between cards; highlights on hover for resize
 const FOCUS_RING = 'pane-focused'; // styled in base.css (accent border on the focused card)
@@ -636,31 +637,37 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
 
   // ---- keybindings (M2 defaults; settings-driven in M3) -------------------
 
-  // Chords chosen to avoid common shell bindings (Ctrl+C/D/Z/R/S etc.). They're intercepted in the
-  // capture phase so they never reach xterm/the PTY; everything else passes straight through.
-  // M3 makes these settings-driven.
+  // Tiling shortcuts are user-rebindable (Settings → Keyboard). We resolve the pressed chord to an
+  // action via the live keybindings, then run it — intercepting in the capture phase so the chord
+  // never reaches xterm/the PTY; everything unbound passes straight through.
   function onKeydown(e: KeyboardEvent): void {
     if (e.repeat || dragging) return; // ignore auto-repeat and keys during a gutter drag
-    // Split: Alt+Shift+'=' → right (row), Alt+Shift+'-' → down (col)
-    if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey) {
-      if (e.code === 'Equal') return intercept(e, () => void splitActive('row'));
-      if (e.code === 'Minus') return intercept(e, () => void splitActive('col'));
-    }
-    // Close: Ctrl+Shift+W
-    if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === 'KeyW') {
-      return intercept(e, closeActive);
-    }
-    // Zoom toggle: Ctrl+Shift+Enter
-    if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === 'Enter') {
-      return intercept(e, toggleZoom);
-    }
-    // Directional focus: Alt+Arrow — only steal the key when there's more than one pane,
-    // so single-pane Alt+Arrow still reaches the shell (word nav).
-    if (e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-      const dir = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' } as const)[
-        e.code as 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown'
-      ];
-      if (dir && root && collectLeaves(root).length > 1) {
+    // Ignore keys while the settings modal owns focus (this is a window capture-phase listener, so it
+    // would otherwise fire BEFORE the Keyboard section's chord-capture button and run the bound action
+    // — e.g. close a pane — behind the modal, while also stealing the keypress from the rebind UI).
+    const t = e.target;
+    if (t instanceof Element && t.closest('.settings-overlay')) return;
+    const chord = chordFromEvent(e);
+    if (!chord) return;
+    const action = matchAction(chord, getSettings().keybindings);
+    if (!action) return;
+    switch (action) {
+      case 'splitRight':
+        return intercept(e, () => void splitActive('row'));
+      case 'splitDown':
+        return intercept(e, () => void splitActive('col'));
+      case 'closePane':
+        return intercept(e, closeActive);
+      case 'toggleZoom':
+        return intercept(e, toggleZoom);
+      case 'focusLeft':
+      case 'focusRight':
+      case 'focusUp':
+      case 'focusDown': {
+        // Directional focus only steals the key when there's more than one pane, so a single-pane
+        // binding (e.g. the default Alt+Arrow) still reaches the shell for word navigation.
+        if (!root || collectLeaves(root).length <= 1) return;
+        const dir = ({ focusLeft: 'left', focusRight: 'right', focusUp: 'up', focusDown: 'down' } as const)[action];
         return intercept(e, () => focusDir(dir));
       }
     }

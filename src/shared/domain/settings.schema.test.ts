@@ -55,6 +55,7 @@ describe('normalize', () => {
       defaultProfileId: 'p1',
       restoreSession: false,
       restoreScrollback: true,
+      keybindings: { ...DEFAULTS.keybindings, splitRight: 'Ctrl+KeyD' },
     };
     expect(normalize(valid)).toEqual(valid);
   });
@@ -82,6 +83,27 @@ describe('normalize', () => {
       expect(normalize({ restoreScrollback }).restoreScrollback).toBe(false));
   });
 
+  describe('keybindings', () => {
+    it('defaults to the full default chord set', () =>
+      expect(normalize({}).keybindings).toEqual(DEFAULTS.keybindings));
+    it('keeps a valid (canonicalized) override and defaults the rest', () => {
+      const kb = normalize({ keybindings: { splitRight: 'Shift+Alt+KeyD' } }).keybindings;
+      expect(kb.splitRight).toBe('Alt+Shift+KeyD'); // canonicalized modifier order
+      expect(kb.closePane).toBe(DEFAULTS.keybindings.closePane); // untouched action keeps its default
+    });
+    it('falls back to the default for a malformed chord, and drops unknown actions', () => {
+      const kb = normalize({ keybindings: { closePane: 'Ctrl+Ctrl', bogusAction: 'Ctrl+KeyZ' } }) as unknown as {
+        keybindings: Record<string, string>;
+      };
+      expect(kb.keybindings.closePane).toBe(DEFAULTS.keybindings.closePane);
+      expect(kb.keybindings.bogusAction).toBeUndefined();
+    });
+    it('always emits exactly the known actions', () =>
+      expect(Object.keys(normalize({ keybindings: 'nope' }).keybindings).sort()).toEqual(
+        Object.keys(DEFAULTS.keybindings).sort(),
+      ));
+  });
+
   it('is idempotent', () => {
     const messy = {
       font: { size: 9999 },
@@ -103,6 +125,7 @@ describe('normalize', () => {
       'appearance',
       'defaultProfileId',
       'font',
+      'keybindings',
       'profiles',
       'restoreScrollback',
       'restoreSession',

@@ -1,20 +1,22 @@
 // The dedicated settings modal: a JetBrains-style dialog with a left category rail and a content
 // panel. Opened from the topbar gear or Ctrl+,. Sections write through immediately (live-apply),
 // so there's no Save/Cancel — just Close. Content is (re)built on each open from a fresh snapshot.
-import { Palette, SquareTerminal, Boxes, SlidersHorizontal, X, type IconNode } from 'lucide';
+import { Palette, SquareTerminal, Boxes, Keyboard, SlidersHorizontal, X, type IconNode } from 'lucide';
 import { icon } from '../icons';
 import { ipc } from '@platform/ipc-client';
 import { getSettings } from '@platform/settings-controller';
 import { createAppearanceSection } from './appearance-section';
 import { createTerminalSection } from './terminal-section';
 import { createProfilesSection } from './profiles-section';
+import { createKeyboardSection } from './keyboard-section';
 import { createGeneralSection } from './general-section';
 
-type CategoryId = 'appearance' | 'terminal' | 'profiles' | 'general';
+type CategoryId = 'appearance' | 'terminal' | 'profiles' | 'keyboard' | 'general';
 const CATEGORIES: { id: CategoryId; label: string; glyph: IconNode }[] = [
   { id: 'appearance', label: 'Appearance', glyph: Palette },
   { id: 'terminal', label: 'Terminal', glyph: SquareTerminal },
   { id: 'profiles', label: 'Profiles', glyph: Boxes },
+  { id: 'keyboard', label: 'Keyboard', glyph: Keyboard },
   { id: 'general', label: 'General', glyph: SlidersHorizontal },
 ];
 
@@ -122,6 +124,8 @@ export function createSettingsModal(): SettingsModal {
       body.replaceChildren(createAppearanceSection(s));
     } else if (active === 'terminal') {
       body.replaceChildren(createTerminalSection(s));
+    } else if (active === 'keyboard') {
+      body.replaceChildren(createKeyboardSection(s));
     } else if (active === 'general') {
       body.replaceChildren(createGeneralSection(s));
     } else {

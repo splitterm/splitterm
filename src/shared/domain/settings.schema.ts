@@ -3,6 +3,7 @@
 // trust boundary that coerces/clamps every field onto the schema before any process consumes it.
 
 import type { UserProfile } from './profile';
+import { KEYBINDINGS, DEFAULT_KEYBINDINGS, normalizeChord, type ActionId } from './keymap';
 
 export type ThemeName = 'JetBrains Dark' | 'OLED Black' | 'Light' | (string & {});
 
@@ -49,6 +50,8 @@ export interface Settings {
    * Only has an effect while restoreSession is on.
    */
   restoreScrollback: boolean;
+  /** keyboard chord per tiling action (action id → canonical chord string, e.g. "Alt+Shift+Equal") */
+  keybindings: Record<ActionId, string>;
 }
 
 export const DEFAULTS: Settings = {
@@ -70,6 +73,7 @@ export const DEFAULTS: Settings = {
   defaultProfileId: '',
   restoreSession: true,
   restoreScrollback: false,
+  keybindings: { ...DEFAULT_KEYBINDINGS },
 };
 
 // Clamp ranges for numeric fields. Bounds are defensive — wide enough to honor any sane user value,
@@ -189,5 +193,10 @@ export function normalize(input: unknown): Settings {
     defaultProfileId: typeof root.defaultProfileId === 'string' ? root.defaultProfileId.slice(0, 200) : '',
     restoreSession: bool(root.restoreSession, DEFAULTS.restoreSession),
     restoreScrollback: bool(root.restoreScrollback, DEFAULTS.restoreScrollback),
+    // Each action gets a valid canonical chord: the stored one if it parses, else the default. Unknown
+    // keys are dropped (only the known actions are emitted).
+    keybindings: Object.fromEntries(
+      KEYBINDINGS.map((a) => [a, normalizeChord(isObj(root.keybindings) ? root.keybindings[a] : undefined) ?? DEFAULT_KEYBINDINGS[a]]),
+    ) as Record<ActionId, string>,
   };
 }
