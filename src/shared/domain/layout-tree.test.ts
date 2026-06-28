@@ -82,9 +82,10 @@ describe('layout-tree', () => {
       expect(moveLeaf(root, 'a', 'zzz', 'row', false)).toBe(root);
     });
 
-    it('moves a leaf to the trailing side of the target', () => {
-      const after = moveLeaf(row3(), 'a', 'c', 'row', false); // a after c
-      expect(after).not.toBe(row3());
+    it('moves a leaf to the trailing side of the target, returning a NEW tree', () => {
+      const root = row3();
+      const after = moveLeaf(root, 'a', 'c', 'row', false); // a after c
+      expect(after).not.toBe(root); // a real change yields a new ref — the renderer's no-op check needs this
       expect(collectLeaves(after).map((n) => n.id)).toEqual(['b', 'c', 'a']);
     });
 
@@ -109,9 +110,33 @@ describe('layout-tree', () => {
     it('keeps exactly the same leaves and valid ratios', () => {
       const after = moveLeaf(row3(), 'a', 'c', 'row', false);
       expect(collectLeaves(after).map((n) => n.id).sort()).toEqual(['a', 'b', 'c']);
-      for (const n of collectLeaves(after)) void n; // all leaves intact
       const sum = (after as SplitNode).ratios.reduce((x, y) => x + y, 0);
       expect(Math.abs(sum - 1)).toBeLessThan(1e-9);
+    });
+
+    it('handles a nested topology: collapses the vacated sub-split and re-nests at the target', () => {
+      // row[ col[a,b], c ] — move 'a' below 'c'.
+      const nested: SplitNode = {
+        type: 'split',
+        dir: 'row',
+        ratios: [0.5, 0.5],
+        children: [
+          { type: 'split', dir: 'col', ratios: [0.5, 0.5], children: [L('a', 1), L('b', 2)] },
+          L('c', 3),
+        ],
+      };
+      const after = moveLeaf(nested, 'a', 'c', 'col', false) as SplitNode; // a below c
+      // col[a,b] loses a → collapses to leaf b; c becomes a col sub-split [c, a].
+      expect(collectLeaves(after).map((n) => n.id)).toEqual(['b', 'c', 'a']);
+      expect(findLeaf(after, 'a')?.termId).toBe(asTermId(1)); // identity preserved through the move
+      expect(after.dir).toBe('row');
+      expect(after.children).toHaveLength(2);
+      expect(after.children[0]!.type).toBe('leaf'); // collapsed b
+      const sub = after.children[1] as SplitNode;
+      expect(sub.type).toBe('split');
+      expect(sub.dir).toBe('col');
+      expect(collectLeaves(sub).map((n) => n.id)).toEqual(['c', 'a']);
+      expect(Math.abs(sub.ratios.reduce((x, y) => x + y, 0) - 1)).toBeLessThan(1e-9);
     });
   });
 

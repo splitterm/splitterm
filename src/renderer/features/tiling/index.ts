@@ -541,9 +541,13 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
       const cell = under instanceof Element ? under.closest<HTMLElement>('[data-leaf-id]') : null;
       setTarget(cell, ev.clientX, ev.clientY);
     };
-    const onUp = (): void => {
+    // Single teardown for every end-of-drag path. `commit` is true only for a real drop (pointerup);
+    // a canceled pointer stream (pointercancel) tears everything down WITHOUT performing the move.
+    const finishDrag = (commit: boolean): void => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      dragging = false;
       document.body.classList.remove('pane-dragging');
       ghost.remove();
       zoneEl.remove();
@@ -551,14 +555,20 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
       const dest = targetId;
       const zone = targetZone;
       if (dest) cellFor(dest)?.classList.remove('drop-target');
-      if (!dest || !zone) return;
+      if (!commit || !dest || !zone) return;
       const split = zoneToSplit(zone);
       if (split) moveLeafTo(sourceId, dest, split.dir, split.before);
       else swap(sourceId, dest); // center zone → swap
     };
+    const onUp = (): void => finishDrag(true);
+    const onCancel = (): void => finishDrag(false);
+    // Suppress layout keyboard chords for the duration of the drag (mirrors the gutter resize), so a
+    // split/close/zoom/focus key can't rebuild the cells out from under the active drag.
+    dragging = true;
     document.body.classList.add('pane-dragging');
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
   }
 
   // Button "−": close the most-recently-created terminal that still exists (down to empty).
