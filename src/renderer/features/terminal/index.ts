@@ -12,6 +12,7 @@ import { createTerminalSearch } from './search';
 import { createTerminalClipboard } from './clipboard';
 import { parseOsc7 } from './osc7';
 import { tryAttachWebgl } from './webgl';
+import { MAX_SCROLLBACK_CHARS } from '@shared/domain/layout-tree';
 
 export interface TerminalInstance {
   termId: TermId;
@@ -58,11 +59,16 @@ export async function createTerminal(
   term.loadAddon(serializeAddon);
 
   // Replay saved scrollback (session restore) as read-only history. Written BEFORE open() per the
-  // addon-serialize guidance (avoids rendering incomplete frames), followed by a dim separator so the
-  // restored history reads apart from the fresh shell that spawns below it.
+  // addon-serialize guidance (avoids rendering incomplete frames). `term.write` parses ASYNCHRONOUSLY,
+  // so we can't rely on registration order to keep replayed escape sequences from reaching app
+  // handlers — instead `replaying` gates the OSC 7 handler below until the write callback fires (after
+  // the replay is fully parsed). No separator is written: it would be re-captured on the next save and
+  // stack across restarts; the bounded history simply flows into the fresh shell (tmux-style).
+  let replaying = !!replay;
   if (replay) {
-    term.write(replay);
-    term.write('\r\n\x1b[2m╶─── restored ───╴\x1b[0m\r\n');
+    term.write(replay, () => {
+      replaying = false;
+    });
   }
   term.open(el);
 
@@ -72,8 +78,11 @@ export async function createTerminal(
   // Tracked so the pane releases its context on close.
   const webgl = s.terminal.webgl ? tryAttachWebgl(term) : null;
 
-  // Track the cwd the shell reports via OSC 7 (`ESC ]7;file://host/path BEL`).
+  // Track the cwd the shell reports via OSC 7 (`ESC ]7;file://host/path BEL`). Ignore any OSC 7 that
+  // arrives while the saved scrollback is still being parsed — replayed (untrusted) content must not
+  // drive app logic; only the live shell's reports should move the cwd.
   const osc7 = term.parser.registerOscHandler(7, (data) => {
+    if (replaying) return true; // swallow replayed OSC 7 (do nothing) until the replay is consumed
     const dir = parseOsc7(data);
     if (dir) cwd = dir;
     return true;
@@ -168,10 +177,21 @@ export async function createTerminal(
       search.reapply(); // recolor live search highlights if the bar is open
       refit();
     },
-    // Capture the buffer (bounded) for session-restore history. Total — never throws into the caller.
+    // Capture the buffer for session-restore history. Total — never throws into the caller.
+    // `excludeAltBuffer` keeps a full-screen TUI (vim/htop) open at save time from capturing its dead
+    // alt-screen (which would leave the restored pane stuck there) — we want the real scrollback.
+    // `excludeModes` keeps live terminal modes (mouse tracking, app cursor keys) out of the replay so
+    // they can't corrupt input to the fresh shell. Shrink to fit the storage cap so a self-produced
+    // capture is never silently dropped on read (rather than persisting a blob that gets rejected).
     serialize: () => {
       try {
-        return serializeAddon.serialize({ scrollback: SERIALIZE_SCROLLBACK });
+        let lines = SERIALIZE_SCROLLBACK;
+        let out = serializeAddon.serialize({ scrollback: lines, excludeAltBuffer: true, excludeModes: true });
+        while (out.length > MAX_SCROLLBACK_CHARS && lines > 0) {
+          lines = Math.floor(lines / 2);
+          out = serializeAddon.serialize({ scrollback: lines, excludeAltBuffer: true, excludeModes: true });
+        }
+        return out.length <= MAX_SCROLLBACK_CHARS ? out : '';
       } catch {
         return '';
       }

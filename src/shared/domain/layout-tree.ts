@@ -134,10 +134,10 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 // session.json from making the next launch spawn thousands of shells.
 const MAX_LEAVES = 100;
 
-// Per-pane serialized scrollback cap. Capture is line-bounded so a real entry is far smaller; a
-// blob over this (a crafted/corrupt file) is DROPPED rather than truncated — slicing mid-escape-
-// sequence would replay as garbage.
-const MAX_SCROLLBACK_CHARS = 1_000_000;
+// Per-pane serialized scrollback cap. Capture (terminal/index.ts) shrinks to fit this same bound, so
+// a self-produced entry is never lost here; a blob over this (a crafted/corrupt file) is DROPPED
+// rather than truncated — slicing mid-escape-sequence would replay as garbage.
+export const MAX_SCROLLBACK_CHARS = 1_000_000;
 
 // Coerce one persisted node. Returns null for anything malformed so the caller can drop the tree.
 // `seen` enforces unique leaf ids (duplicates would corrupt focus/close bookkeeping) and, via its

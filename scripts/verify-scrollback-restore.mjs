@@ -59,12 +59,10 @@ try {
   if (!win) { result.error = 'no window (launch 2)'; await finish(1); }
   result.launch2_replayed = await waitFor(win, new RegExp(MARK));
   await sleep(500);
-  const t2 = await rowsText(win);
   result.launch2_panes = await win.locator('[data-leaf-id]').count();
-  result.launch2_hasSeparator = /restored/.test(t2); // the dim "restored" separator the replay writes
   await app.close().catch(() => {});
 
-  const ok = result.launch1_printed && result.launch2_replayed && result.launch2_panes === 1 && result.launch2_hasSeparator;
+  const ok = result.launch1_printed && result.launch2_replayed && result.launch2_panes === 1;
   result.ok = ok;
   await finish(ok ? 0 : 1);
 } catch (err) {
