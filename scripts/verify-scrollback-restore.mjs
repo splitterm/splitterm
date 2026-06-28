@@ -51,18 +51,22 @@ try {
   await win.keyboard.type(`echo ${MARK}`);
   await win.keyboard.press('Enter');
   result.launch1_printed = await waitFor(win, new RegExp(MARK));
-  await sleep(1200); // let output settle; the save on close (pagehide) captures the buffer
+  // Force a deterministic session save that captures the scrollback: a split fires the tiling's
+  // onChange → debounced save, which serializes this pane's buffer (marker included). Relying solely on
+  // the save-on-close (pagehide) would race the quit flush and flake under CI load.
+  await win.keyboard.press('Alt+Shift+Equal');
+  await sleep(1500); // let the split's debounced save (renderer 400ms + main 250ms) reach disk
   await app.close().catch(() => {});
 
-  // ---- Launch 2: the restored pane replays the saved scrollback ----
+  // ---- Launch 2: the restored panes replay the saved scrollback ----
   ({ app, win } = await launch());
   if (!win) { result.error = 'no window (launch 2)'; await finish(1); }
-  result.launch2_replayed = await waitFor(win, new RegExp(MARK));
+  result.launch2_replayed = await waitFor(win, new RegExp(MARK)); // marker comes back from the first pane
   await sleep(500);
   result.launch2_panes = await win.locator('[data-leaf-id]').count();
   await app.close().catch(() => {});
 
-  const ok = result.launch1_printed && result.launch2_replayed && result.launch2_panes === 1;
+  const ok = result.launch1_printed && result.launch2_replayed && result.launch2_panes === 2;
   result.ok = ok;
   await finish(ok ? 0 : 1);
 } catch (err) {
