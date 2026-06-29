@@ -19,6 +19,7 @@ import {
   splitLeaf,
   closeLeaf,
   moveLeaf,
+  equalizeRatios,
 } from '@shared/domain/layout-tree';
 import { pickZone, zoneToSplit, type Zone } from './drop-zone';
 import { chordFromEvent, matchAction } from '@shared/domain/keymap';
@@ -264,6 +265,7 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
 
   function makeGutter(node: SplitNode, i: number, grid: HTMLElement): HTMLElement {
     const g = document.createElement('div');
+    g.dataset.gutter = node.dir; // marks the resize handle (also used by the e2e)
     g.className =
       `min-w-0 min-h-0 rounded-full hover:bg-[var(--accent)] ` +
       `transition-colors duration-[var(--motion-fast)] ` +
@@ -604,6 +606,23 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     relayout();
   }
 
+  // Reset every split's ratios to an even share (undo manual gutter-resizing).
+  function equalizeAll(): void {
+    if (!root) return;
+    root = equalizeRatios(root);
+    relayout();
+  }
+
+  // Cycle focus through panes in creation order, wrapping. delta +1 = next, -1 = previous.
+  function focusCycle(delta: 1 | -1): void {
+    if (!root) return;
+    const ids = order.filter((id) => findLeaf(root!, id));
+    if (ids.length < 2) return;
+    const cur = focusedLeafId ? ids.indexOf(focusedLeafId) : -1;
+    const next = ids[(cur + delta + ids.length) % ids.length];
+    if (next) focusLeaf(next);
+  }
+
   type FocusDir = 'left' | 'right' | 'up' | 'down';
   function focusDir(dir: FocusDir): void {
     const activeId = focusedLeafId;
@@ -660,6 +679,8 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
         return intercept(e, closeActive);
       case 'toggleZoom':
         return intercept(e, toggleZoom);
+      case 'equalizePanes':
+        return intercept(e, equalizeAll);
       case 'focusLeft':
       case 'focusRight':
       case 'focusUp':
@@ -669,6 +690,12 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
         if (!root || collectLeaves(root).length <= 1) return;
         const dir = ({ focusLeft: 'left', focusRight: 'right', focusUp: 'up', focusDown: 'down' } as const)[action];
         return intercept(e, () => focusDir(dir));
+      }
+      case 'focusNext':
+      case 'focusPrev': {
+        // Like directional focus, only intercept with more than one pane.
+        if (!root || collectLeaves(root).length <= 1) return;
+        return intercept(e, () => focusCycle(action === 'focusNext' ? 1 : -1));
       }
     }
   }

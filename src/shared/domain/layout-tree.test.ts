@@ -5,10 +5,12 @@ import {
   splitLeaf,
   closeLeaf,
   moveLeaf,
+  equalizeRatios,
   collectLeaves,
   findLeaf,
   normalizeSession,
   EMPTY_SESSION,
+  type LayoutNode,
   type SplitNode,
   type SessionV1,
 } from './layout-tree';
@@ -64,6 +66,26 @@ describe('layout-tree', () => {
       const sub = (root as SplitNode).children[1] as SplitNode;
       expect(sub.type).toBe('split');
       expect(collectLeaves(sub).map((n) => n.id)).toEqual(['c', 'b']); // c above b
+    });
+  });
+
+  describe('equalizeRatios', () => {
+    it('resets a flat split to even shares', () => {
+      const root = { type: 'split', dir: 'row', children: [L('a'), L('b'), L('c')], ratios: [0.7, 0.2, 0.1] } as SplitNode;
+      expect((equalizeRatios(root) as SplitNode).ratios.every((r) => Math.abs(r - 1 / 3) < 1e-9)).toBe(true);
+    });
+    it('evens every nested split and leaves a leaf untouched', () => {
+      expect(equalizeRatios(L('a'))).toEqual(L('a'));
+      const nested: LayoutNode = {
+        type: 'split',
+        dir: 'row',
+        ratios: [0.9, 0.1],
+        children: [L('a'), { type: 'split', dir: 'col', ratios: [0.8, 0.2], children: [L('b'), L('c')] }],
+      };
+      const out = equalizeRatios(nested) as SplitNode;
+      expect(out.ratios).toEqual([0.5, 0.5]);
+      expect((out.children[1] as SplitNode).ratios).toEqual([0.5, 0.5]);
+      expect(collectLeaves(out).map((n) => n.id)).toEqual(['a', 'b', 'c']); // structure preserved
     });
   });
 

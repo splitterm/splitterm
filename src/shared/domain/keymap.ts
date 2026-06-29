@@ -10,10 +10,13 @@ export const KEYBINDINGS = [
   'splitDown',
   'closePane',
   'toggleZoom',
+  'equalizePanes',
   'focusLeft',
   'focusRight',
   'focusUp',
   'focusDown',
+  'focusNext',
+  'focusPrev',
 ] as const;
 
 export type ActionId = (typeof KEYBINDINGS)[number];
@@ -23,10 +26,13 @@ export const DEFAULT_KEYBINDINGS: Record<ActionId, string> = {
   splitDown: 'Alt+Shift+Minus',
   closePane: 'Ctrl+Shift+KeyW',
   toggleZoom: 'Ctrl+Shift+Enter',
+  equalizePanes: 'Alt+Shift+KeyE',
   focusLeft: 'Alt+ArrowLeft',
   focusRight: 'Alt+ArrowRight',
   focusUp: 'Alt+ArrowUp',
   focusDown: 'Alt+ArrowDown',
+  focusNext: 'Alt+BracketRight',
+  focusPrev: 'Alt+BracketLeft',
 };
 
 /** Human labels for the settings UI. */
@@ -35,10 +41,13 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   splitDown: 'Split down',
   closePane: 'Close pane',
   toggleZoom: 'Toggle zoom',
+  equalizePanes: 'Equalize panes',
   focusLeft: 'Focus left',
   focusRight: 'Focus right',
   focusUp: 'Focus up',
   focusDown: 'Focus down',
+  focusNext: 'Focus next',
+  focusPrev: 'Focus previous',
 };
 
 const MODIFIERS = ['Ctrl', 'Alt', 'Shift', 'Meta'] as const;

@@ -116,6 +116,16 @@ export function closeLeaf(node: LayoutNode, targetId: string): LayoutNode | null
   return { ...node, children: node.children.map((c) => closeLeaf(c, targetId) as LayoutNode) };
 }
 
+/** Reset every split's child ratios to an even share (undoes manual gutter-resizing). Returns a new tree. */
+export function equalizeRatios(node: LayoutNode): LayoutNode {
+  if (node.type === 'leaf') return node;
+  return {
+    ...node,
+    children: node.children.map(equalizeRatios),
+    ratios: node.children.map(() => 1 / node.children.length),
+  };
+}
+
 /** Serialized session (written to userData/session.json by main; restored on launch). */
 export interface SessionV1 {
   v: 1;
