@@ -23,18 +23,22 @@ function applyAppearance(s: Settings): void {
   else delete html.dataset.theme;
   if (s.appearance.reduceMotion) html.dataset.reduceMotion = 'true';
   else delete html.dataset.reduceMotion;
-  // Focused-pane border colour + sidebar status-dot colours: a user #hex sets the CSS var, otherwise
-  // the var is cleared so the built-in (vibrant) default in base.css applies. All validated in normalize().
-  const setVar = (name: string, value: string): void => {
-    if (value) html.style.setProperty(name, value);
-    else html.style.removeProperty(name);
-  };
-  setVar('--pane-focus', s.appearance.focusBorderColor);
-  const sc = s.appearance.statusColors;
-  setVar('--status-working', sc.working);
-  setVar('--status-claude', sc.claudeWorking);
-  setVar('--status-attention', sc.attention);
-  setVar('--status-exited', sc.exited);
+  // Focused-pane border colour: a user #hex sets the CSS var, otherwise it's cleared so the theme accent
+  // applies. (Sidebar status-dot colours are resolved per-pane in the sidebar, not via global vars,
+  // because they layer global defaults under per-profile overrides.)
+  if (s.appearance.focusBorderColor) html.style.setProperty('--pane-focus', s.appearance.focusBorderColor);
+  else html.style.removeProperty('--pane-focus');
+}
+
+// Renderer-side subscribers (e.g. the Sessions sidebar) that need to re-render when settings change —
+// beyond the CSS/terminal application above (which can't repaint per-pane status appearance).
+const changeListeners = new Set<(s: Settings) => void>();
+export function onSettingsChange(cb: (s: Settings) => void): () => void {
+  changeListeners.add(cb);
+  return () => changeListeners.delete(cb);
+}
+function notifyChange(s: Settings): void {
+  for (const cb of changeListeners) cb(s);
 }
 
 function applyToTerminals(s: Settings): void {
@@ -55,5 +59,6 @@ export async function initSettings(): Promise<void> {
     current = s;
     applyAppearance(s); // data-theme first so terminals re-read the updated CSS vars
     applyToTerminals(s);
+    notifyChange(s);
   });
 }

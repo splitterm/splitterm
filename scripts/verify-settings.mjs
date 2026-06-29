@@ -57,7 +57,7 @@ try {
     await switches.nth(0).click(); // disable OS sync so the theme select is usable
     await sleep(150);
   }
-  await win.locator('.settings-dialog select').selectOption('OLED Black');
+  await win.locator('.settings-dialog select[aria-label="Theme"]').selectOption('OLED Black'); // not the status Animation selects
   await sleep(300);
   await switches.nth(1).click(); // reduce motion ON
   await sleep(300);

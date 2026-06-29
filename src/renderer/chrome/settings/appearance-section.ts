@@ -2,7 +2,8 @@
 // applied live by the renderer settings-controller (which flips <html data-theme> + motion tokens).
 import { ipc } from '@platform/ipc-client';
 import type { Settings, ThemeName } from '@shared/domain/settings.schema';
-import { row, sectionHeading, selectControl, toggle, colorControl } from './controls';
+import { row, sectionHeading, selectControl, toggle, colorControl, animSelect } from './controls';
+import { STATUS_LABELS, DEFAULT_STATUS_COLORS, type StatusState } from '@shared/domain/status-appearance';
 
 // The colour swatch needs a #rrggbb value; fall back to the theme accent (or a default blue if
 // the computed token isn't a 6-digit hex) so the swatch previews the current default.
@@ -58,22 +59,27 @@ export function createAppearanceSection(initial: Settings): HTMLElement {
     },
   });
 
-  // Sidebar pane-status dot colours — defaults mirror the (vibrant) built-ins in base.css.
-  const STATUS_DEFAULTS = { working: '#3fb950', claudeWorking: '#d97757', attention: '#d29922', exited: '#f85149' } as const;
-  type StatusKey = keyof typeof STATUS_DEFAULTS;
-  const statusRow = (key: StatusKey, label: string, hint: string): HTMLElement =>
-    row(
-      label,
+  // Sidebar pane-status dots — the GLOBAL default colour + animation per state. Profiles can override
+  // these per-profile (Settings → Profiles). Each is colour (swatch + Default) + animation (Default/Pulse/Static).
+  const statusRow = (key: StatusState, hint: string): HTMLElement => {
+    const ctl = document.createElement('div');
+    ctl.className = 'flex items-center gap-2';
+    ctl.append(
       colorControl({
         value: local.appearance.statusColors[key],
-        fallback: STATUS_DEFAULTS[key],
+        fallback: DEFAULT_STATUS_COLORS[key],
         onChange: (v) => {
           local.appearance.statusColors[key] = v;
           save();
         },
       }),
-      hint,
+      animSelect(local.appearance.statusAnimations[key], (v) => {
+        local.appearance.statusAnimations[key] = v;
+        save();
+      }),
     );
+    return row(STATUS_LABELS[key], ctl, hint);
+  };
 
   el.append(
     sectionHeading('Theme'),
@@ -82,10 +88,10 @@ export function createAppearanceSection(initial: Settings): HTMLElement {
     sectionHeading('Panes'),
     row('Focused pane border', focusColor, 'Colour of the outline around the active terminal. Default follows the theme accent.'),
     sectionHeading('Status colours'),
-    statusRow('working', 'Active', 'A terminal producing output.'),
-    statusRow('claudeWorking', 'Claude working', 'Claude Code is processing a turn.'),
-    statusRow('attention', 'Needs input', 'A pane that rang the bell and went quiet.'),
-    statusRow('exited', 'Exited', 'The process has ended.'),
+    statusRow('working', 'A terminal producing output.'),
+    statusRow('claudeWorking', 'Claude Code is processing a turn.'),
+    statusRow('attention', 'A pane that rang the bell and went quiet.'),
+    statusRow('exited', 'The process has ended.'),
     sectionHeading('Motion'),
     row('Reduce motion', motionToggle, 'Disable split/close/drawer animations and transitions.'),
   );

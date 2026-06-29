@@ -44,6 +44,7 @@ describe('normalize', () => {
         reduceMotion: true,
         focusBorderColor: '#ff8800',
         statusColors: { working: '#00ff00', claudeWorking: '#ff0000', attention: '#0000ff', exited: '#ffffff' },
+        statusAnimations: { working: 'pulse', claudeWorking: 'static', attention: '', exited: 'pulse' },
       },
       font: { family: 'Fira Code', size: 16 },
       terminal: {
@@ -65,6 +66,33 @@ describe('normalize', () => {
       keybindings: { ...DEFAULTS.keybindings, splitRight: 'Ctrl+KeyD' },
     };
     expect(normalize(valid)).toEqual(valid);
+  });
+
+  describe('appearance.statusAnimations', () => {
+    it('keeps pulse/static and rejects junk', () => {
+      const sa = normalize({ appearance: { statusAnimations: { working: 'pulse', attention: 'static', exited: 'spin', claudeWorking: 1 } } })
+        .appearance.statusAnimations;
+      expect(sa.working).toBe('pulse');
+      expect(sa.attention).toBe('static');
+      expect(sa.exited).toBe(''); // invalid → default
+      expect(sa.claudeWorking).toBe('');
+    });
+  });
+
+  describe('profile.status override', () => {
+    const prof = (status: unknown): unknown => normalize({ profiles: [{ id: 'p', name: 'P', baseShellId: 'pwsh', status }] }).profiles[0];
+    it('drops when empty / not an override', () => {
+      expect((prof({}) as { status?: unknown }).status).toBeUndefined();
+      expect((prof('nope') as { status?: unknown }).status).toBeUndefined();
+    });
+    it('keeps enabled:false, valid #hex colours, and valid animations', () => {
+      const s = (prof({ enabled: false, colors: { working: '#abc', attention: 'red' }, animations: { working: 'static', exited: 'spin' } }) as {
+        status: { enabled?: boolean; colors?: Record<string, string>; animations?: Record<string, string> };
+      }).status;
+      expect(s.enabled).toBe(false);
+      expect(s.colors).toEqual({ working: '#aabbcc' }); // 3-digit expanded; 'red' dropped
+      expect(s.animations).toEqual({ working: 'static' }); // 'spin' dropped
+    });
   });
 
   describe('appearance.statusColors', () => {

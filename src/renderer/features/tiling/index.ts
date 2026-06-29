@@ -34,6 +34,8 @@ export interface PaneInfo {
   termId: number;
   title: string;
   status: PaneStatus;
+  /** the launch profile id, for resolving per-profile status appearance ('' / undefined = none) */
+  profileId?: string;
   focused: boolean;
 }
 
@@ -88,6 +90,7 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
         termId: lf.termId,
         title: pane?.displayTitle() ?? '',
         status: pane?.status() ?? 'idle',
+        profileId: pane?.profileId,
         focused: id === focusedLeafId,
       });
     }

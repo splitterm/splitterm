@@ -7,7 +7,7 @@ import '../styles/tokens.css';
 import '../styles/base.css';
 import { ipc } from '@platform/ipc-client';
 import { initPortBridge } from '@platform/pty-port';
-import { initSettings, getSettings } from '@platform/settings-controller';
+import { initSettings, getSettings, onSettingsChange } from '@platform/settings-controller';
 import { createTiling, type Tiling } from '@features/tiling';
 import { createTopbar } from '../chrome/topbar';
 import { createSidebar } from '../chrome/sidebar';
@@ -150,6 +150,7 @@ initSettings()
   .then(async (t) => {
     tiling = t;
     tiling.onChange((list) => sidebar.setSessions(list));
+    onSettingsChange(() => sidebar.refresh()); // re-paint status dots when colours/animation/profiles change
 
     // Restore the previous layout (fresh shells in the saved cwds/profiles) before subscribing the
     // save, so the restore isn't immediately persisted back over itself. The setting gates the WHOLE

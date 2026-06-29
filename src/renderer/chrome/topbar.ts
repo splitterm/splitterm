@@ -1,6 +1,5 @@
 import { PanelLeft, Settings as SettingsIcon } from 'lucide';
 import { icon } from './icons';
-import { logoMark } from './logo';
 import { createNewTerminalButton } from './new-terminal-button';
 
 // The top bar: a draggable window region with the sidebar toggle + brand + new-terminal button +
@@ -27,13 +26,11 @@ export function createTopbar(opts: {
   toggle.appendChild(icon(PanelLeft, 18));
   toggle.addEventListener('click', opts.onToggleSidebar);
 
-  // Brand: the splitterm mark (tints to the text colour, so it adapts to dark/light) + wordmark.
-  const brand = document.createElement('div');
-  brand.className = 'flex items-center gap-1.5 pl-1 pr-1 text-[var(--text-primary)] select-none';
-  const wordmark = document.createElement('span');
-  wordmark.className = 'text-[12px] font-semibold tracking-wide';
-  wordmark.textContent = 'splitterm';
-  brand.append(logoMark(17), wordmark);
+  // Brand: just the wordmark — the split-terminal mark is the app/window icon, and sitting it next to
+  // the (similarly boxy) sidebar-toggle icon read as two competing glyphs.
+  const brand = document.createElement('span');
+  brand.className = 'pl-1.5 pr-1 text-[12px] font-semibold tracking-wide text-[var(--text-primary)] select-none';
+  brand.textContent = 'splitterm';
 
   const newTerminal = createNewTerminalButton({
     onNew: opts.onNewTerminal,

@@ -244,42 +244,41 @@ html[data-reduce-motion='true'] {
   box-shadow: inset 0 0 0 2px #e0843b;
 }
 
-/* Sessions sidebar — per-pane activity dot. working = pulsing accent, attention = amber, idle = dim,
-   exited = muted red. The pulse is disabled under reduce-motion. */
+/* Sessions sidebar — per-pane activity dot. The dot's COLOUR + the `.pulse` animation toggle are set
+   per-row by the sidebar (resolved built-in → global → per-profile); the values below are fallbacks.
+   idle = dim. The pulse is disabled under reduce-motion. */
 .pane-status-dot {
   width: 7px;
   height: 7px;
   border-radius: 9999px;
   background: var(--text-disabled);
 }
-/* Vibrant, high-visibility status colours; each is a CSS var the user can override (Settings →
-   Appearance → Status colours), falling back to the built-in default here. */
 .pane-status-dot[data-status='working'] {
-  background: var(--status-working, #3fb950); /* green — generic activity (was a hard-to-see blue) */
-  animation: pane-status-pulse 1.2s var(--ease-out) infinite;
+  background: #3fb950;
 }
-/* Claude Code is actively working — Claude's coral, prominent: pulsing dot, coloured label, and a row
-   accent/wash so a working Claude is obvious at a glance (distinct from generic activity above). */
 .pane-status-dot[data-status='claudeWorking'] {
-  background: var(--status-claude, #d97757);
+  background: #d97757;
+}
+.pane-status-dot[data-status='attention'] {
+  background: #d29922;
+}
+.pane-status-dot[data-status='exited'] {
+  background: #f85149;
+}
+.pane-status-dot.pulse {
   animation: pane-status-pulse 1.2s var(--ease-out) infinite;
 }
 .pane-status-text[data-status='claudeWorking'] {
-  color: var(--status-claude, #d97757);
+  color: #d97757;
   font-weight: 600;
 }
-.row-claude-working {
-  box-shadow: inset 2px 0 0 var(--status-claude, #d97757);
-  background: color-mix(in srgb, var(--status-claude, #d97757) 13%, transparent) !important;
-}
-.pane-status-dot[data-status='attention'] {
-  background: var(--status-attention, #d29922); /* amber */
-}
 .pane-status-text[data-status='attention'] {
-  color: var(--status-attention, #d29922);
+  color: #d29922;
 }
-.pane-status-dot[data-status='exited'] {
-  background: var(--status-exited, #f85149); /* red */
+/* Claude Code working — a prominent row accent/wash. --row-claude is set per-row to the resolved colour. */
+.row-claude-working {
+  box-shadow: inset 2px 0 0 var(--row-claude, #d97757);
+  background: color-mix(in srgb, var(--row-claude, #d97757) 13%, transparent) !important;
 }
 @keyframes pane-status-pulse {
   0%,
@@ -291,13 +290,11 @@ html[data-reduce-motion='true'] {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pane-status-dot[data-status='working'],
-  .pane-status-dot[data-status='claudeWorking'] {
+  .pane-status-dot.pulse {
     animation: none;
   }
 }
-html[data-reduce-motion='true'] .pane-status-dot[data-status='working'],
-html[data-reduce-motion='true'] .pane-status-dot[data-status='claudeWorking'] {
+html[data-reduce-motion='true'] .pane-status-dot.pulse {
   animation: none;
 }
 

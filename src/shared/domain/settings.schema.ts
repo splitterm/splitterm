@@ -4,6 +4,7 @@
 
 import type { UserProfile } from './profile';
 import { KEYBINDINGS, DEFAULT_KEYBINDINGS, normalizeChord, type ActionId } from './keymap';
+import { STATUS_STATES, type StatusState, type StatusAnim, type ProfileStatus } from './status-appearance';
 
 export type ThemeName = 'Dark' | 'OLED Black' | 'Light' | (string & {});
 
@@ -19,12 +20,9 @@ export interface Settings {
     /** border colour of the focused pane as a #hex; '' = use the theme accent (default) */
     focusBorderColor: string;
     /** sidebar pane-status dot colours as #hex; '' = use the (vibrant) built-in default for that state */
-    statusColors: {
-      working: string;
-      claudeWorking: string;
-      attention: string;
-      exited: string;
-    };
+    statusColors: Record<StatusState, string>;
+    /** sidebar pane-status dot animation per state; '' = use the built-in default (working/claude pulse) */
+    statusAnimations: Record<StatusState, StatusAnim | ''>;
   };
   font: {
     family: string;
@@ -77,6 +75,7 @@ export const DEFAULTS: Settings = {
     reduceMotion: false,
     focusBorderColor: '',
     statusColors: { working: '', claudeWorking: '', attention: '', exited: '' },
+    statusAnimations: { working: '', claudeWorking: '', attention: '', exited: '' },
   },
   font: { family: 'Cascadia Code, Consolas, ui-monospace, monospace', size: 13 },
   terminal: {
@@ -143,6 +142,37 @@ const bool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean'
 // Migrate the old built-in theme name to its current name (keeps a pre-existing settings.json valid).
 const migrateTheme = (theme: string): string => (theme === 'JetBrains Dark' ? 'Dark' : theme);
 
+const statusColorRecord = (v: unknown): Record<StatusState, string> => {
+  const o = isObj(v) ? v : {};
+  return Object.fromEntries(STATUS_STATES.map((s) => [s, hexColor(o[s])])) as Record<StatusState, string>;
+};
+const statusAnimRecord = (v: unknown): Record<StatusState, StatusAnim | ''> => {
+  const o = isObj(v) ? v : {};
+  return Object.fromEntries(
+    STATUS_STATES.map((s) => [s, o[s] === 'pulse' || o[s] === 'static' ? o[s] : '']),
+  ) as Record<StatusState, StatusAnim | ''>;
+};
+// A profile's optional status override — only well-formed, non-default fields are kept; '' overall → undefined.
+function normalizeProfileStatus(v: unknown): ProfileStatus | undefined {
+  if (!isObj(v)) return undefined;
+  const out: ProfileStatus = {};
+  if (typeof v.enabled === 'boolean') out.enabled = v.enabled;
+  const colorsIn = isObj(v.colors) ? v.colors : {};
+  const colors: Partial<Record<StatusState, string>> = {};
+  for (const s of STATUS_STATES) {
+    const h = hexColor(colorsIn[s]);
+    if (h) colors[s] = h;
+  }
+  if (Object.keys(colors).length) out.colors = colors;
+  const animsIn = isObj(v.animations) ? v.animations : {};
+  const animations: Partial<Record<StatusState, StatusAnim>> = {};
+  for (const s of STATUS_STATES) {
+    if (animsIn[s] === 'pulse' || animsIn[s] === 'static') animations[s] = animsIn[s] as StatusAnim;
+  }
+  if (Object.keys(animations).length) out.animations = animations;
+  return Object.keys(out).length ? out : undefined;
+}
+
 // A #hex colour or '' (meaning "use the theme default"). Anything else → ''. This is a trust boundary:
 // the value is written into a CSS custom property, so only a strict hex passes. A 3-digit #rgb is
 // expanded to #rrggbb so stored values are always 6-digit (the native colour picker only does #rrggbb).
@@ -183,6 +213,8 @@ function normalizeProfile(v: unknown): UserProfile | null {
   if (startupCommands) profile.startupCommands = startupCommands;
   const restoreCommands = commandList(v.restoreCommands);
   if (restoreCommands) profile.restoreCommands = restoreCommands;
+  const status = normalizeProfileStatus(v.status);
+  if (status) profile.status = status;
   return profile;
 }
 
@@ -205,12 +237,8 @@ export function normalize(input: unknown): Settings {
       followOS: bool(appearance.followOS, DEFAULTS.appearance.followOS),
       reduceMotion: bool(appearance.reduceMotion, DEFAULTS.appearance.reduceMotion),
       focusBorderColor: hexColor(appearance.focusBorderColor),
-      statusColors: ((sc) => ({
-        working: hexColor(sc.working),
-        claudeWorking: hexColor(sc.claudeWorking),
-        attention: hexColor(sc.attention),
-        exited: hexColor(sc.exited),
-      }))(isObj(appearance.statusColors) ? appearance.statusColors : {}),
+      statusColors: statusColorRecord(appearance.statusColors),
+      statusAnimations: statusAnimRecord(appearance.statusAnimations),
     },
     font: {
       family: str(font.family, DEFAULTS.font.family),

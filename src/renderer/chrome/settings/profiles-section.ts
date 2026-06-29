@@ -7,7 +7,8 @@ import { ipc } from '@platform/ipc-client';
 import type { Settings } from '@shared/domain/settings.schema';
 import type { UserProfile } from '@shared/domain/profile';
 import type { ShellProfile } from '@shared/ipc';
-import { FIELD, row, sectionHeading, selectControl, textControl, textareaControl } from './controls';
+import { FIELD, row, sectionHeading, selectControl, textControl, textareaControl, colorControl, animSelect, toggle } from './controls';
+import { STATUS_STATES, STATUS_LABELS, DEFAULT_STATUS_COLORS, type ProfileStatus } from '@shared/domain/status-appearance';
 
 /** Split a textarea's lines into a trimmed command list, or undefined when empty. */
 function linesToCommands(text: string): string[] | undefined {
@@ -19,6 +20,8 @@ export function createProfilesSection(initial: Settings, shells: ShellProfile[])
   let profiles = structuredClone(initial.profiles);
   let currentDefault = initial.defaultProfileId; // which profile the "+" opens ('' = OS shell)
   let editingId: string | null = null; // the profile being edited (the form saves it), or null = add new
+  let statusEdit: ProfileStatus = {}; // the form's working copy of the per-profile status override
+  const g = initial.appearance; // global status colours, used as the per-profile "Default" preview
 
   const el = document.createElement('div');
   el.className = 'flex flex-col gap-2';
@@ -95,7 +98,57 @@ export function createProfilesSection(initial: Settings, shells: ShellProfile[])
   buttons.className = 'flex gap-2';
   addBtn.classList.add('px-3');
   buttons.append(addBtn, cancelBtn);
-  form.append(nameInput, shellSelect, startupArea, restoreArea, buttons);
+
+  // ---- per-profile status override (collapsed by default to keep the form uncluttered) ----
+  const statusHost = document.createElement('div');
+  function renderStatusSection(): void {
+    const details = document.createElement('details');
+    details.className = 'rounded-[var(--r-sm)] border border-[var(--border)] px-2 py-1';
+    const summary = document.createElement('summary');
+    summary.className = 'text-[11px] text-[var(--text-secondary)] cursor-pointer select-none py-1';
+    summary.textContent = 'Status appearance — colour, animation, on/off (override the global defaults)';
+    const body = document.createElement('div');
+    body.className = 'flex flex-col pt-1';
+    body.append(
+      row(
+        'Show status',
+        toggle({
+          checked: statusEdit.enabled !== false,
+          onChange: (v) => {
+            if (v) delete statusEdit.enabled;
+            else statusEdit.enabled = false;
+          },
+        }),
+        'Off = no status dot for this profile’s panes.',
+      ),
+    );
+    for (const st of STATUS_STATES) {
+      const ctl = document.createElement('div');
+      ctl.className = 'flex items-center gap-2';
+      ctl.append(
+        colorControl({
+          value: statusEdit.colors?.[st] ?? '',
+          fallback: g.statusColors[st] || DEFAULT_STATUS_COLORS[st],
+          onChange: (v) => {
+            statusEdit.colors = { ...statusEdit.colors };
+            if (v) statusEdit.colors[st] = v;
+            else delete statusEdit.colors[st];
+          },
+        }),
+        animSelect(statusEdit.animations?.[st] ?? '', (v) => {
+          statusEdit.animations = { ...statusEdit.animations };
+          if (v) statusEdit.animations[st] = v;
+          else delete statusEdit.animations[st];
+        }),
+      );
+      body.append(row(STATUS_LABELS[st], ctl, ''));
+    }
+    details.append(summary, body);
+    statusHost.replaceChildren(details);
+  }
+  renderStatusSection();
+
+  form.append(nameInput, shellSelect, startupArea, restoreArea, statusHost, buttons);
 
   const clearTransientShell = (): void => shellSelect.querySelectorAll('option[data-transient]').forEach((o) => o.remove());
 
@@ -107,6 +160,8 @@ export function createProfilesSection(initial: Settings, shells: ShellProfile[])
     shellSelect.selectedIndex = 0;
     startupArea.value = '';
     restoreArea.value = '';
+    statusEdit = {};
+    renderStatusSection();
     addBtn.textContent = 'Add profile';
     cancelBtn.hidden = true;
   }
@@ -127,6 +182,8 @@ export function createProfilesSection(initial: Settings, shells: ShellProfile[])
     }
     startupArea.value = (p.startupCommands ?? []).join('\n');
     restoreArea.value = (p.restoreCommands ?? []).join('\n');
+    statusEdit = structuredClone(p.status ?? {});
+    renderStatusSection();
     addBtn.textContent = 'Save changes';
     cancelBtn.hidden = false;
     nameInput.focus();
@@ -188,6 +245,12 @@ export function createProfilesSection(initial: Settings, shells: ShellProfile[])
     if (startupCommands) profile.startupCommands = startupCommands;
     const restoreCommands = linesToCommands(restoreArea.value);
     if (restoreCommands) profile.restoreCommands = restoreCommands;
+    // Attach the status override only if it actually overrides something (normalize() drops empties).
+    const hasStatus =
+      statusEdit.enabled === false ||
+      Object.values(statusEdit.colors ?? {}).some(Boolean) ||
+      Object.values(statusEdit.animations ?? {}).some(Boolean);
+    if (hasStatus) profile.status = structuredClone(statusEdit);
     profiles = editingId ? profiles.map((p) => (p.id === editingId ? profile : p)) : [...profiles, profile];
     await ipc.settings.set({ profiles });
     resetForm();

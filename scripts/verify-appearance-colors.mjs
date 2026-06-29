@@ -72,10 +72,11 @@ try {
   await sleep(400);
   result.afterReset = await focusBorder();
 
-  // A status colour via the picker → the matching CSS var is set on <html>.
+  // A global status colour via the picker → persisted to appearance.statusColors (the sidebar resolves
+  // it per-pane; verify-profile-status.mjs covers the dot actually taking a colour).
   await openAppearance();
   await pickColor(1, '#00ff00'); // the "Active" status swatch (after the focus swatch)
-  result.statusVar = await win.evaluate(() => document.documentElement.style.getPropertyValue('--status-working').trim());
+  result.statusColorSaved = await win.evaluate(async () => (await window.splitterm.settings.get()).appearance.statusColors.working);
 
   // Orphan guard: close the modal (Escape) with a picker open, reopen → the picker must be gone.
   await win.keyboard.press('Escape');
@@ -91,7 +92,7 @@ try {
     !isRed(result.defaultBorder) &&
     isRed(result.afterSet) &&
     result.afterReset === result.defaultBorder &&
-    result.statusVar === '#00ff00' &&
+    result.statusColorSaved === '#00ff00' &&
     result.noOrphanPicker;
   result.ok = ok;
   await finish(ok ? 0 : 1);

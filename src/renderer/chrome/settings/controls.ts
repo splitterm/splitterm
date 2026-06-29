@@ -1,6 +1,7 @@
 // Small form primitives shared by the settings sections — a labeled row, a section heading, and
 // themed select / number / text / toggle / colour controls. Keeps the sections declarative.
 import { createColorPicker } from './color-picker';
+import type { StatusAnim } from '@shared/domain/status-appearance';
 
 // Fired on `document` by the settings modal (close / category switch) so any open colour-picker popover
 // tears down with the modal — closing every path, not just the pointer ones.
@@ -66,6 +67,26 @@ export function selectControl(opts: {
   sel.value = opts.value;
   sel.disabled = opts.disabled ?? false;
   sel.addEventListener('change', () => opts.onChange(sel.value));
+  return sel;
+}
+
+/** Animation picker for a status state: '' = Default (inherit), else Pulse / Static. */
+export function animSelect(value: StatusAnim | '', onChange: (v: StatusAnim | '') => void): HTMLSelectElement {
+  const sel = document.createElement('select');
+  sel.className = FIELD + ' cursor-pointer';
+  sel.setAttribute('aria-label', 'Animation');
+  for (const o of [
+    { value: '', label: 'Default' },
+    { value: 'pulse', label: 'Pulse' },
+    { value: 'static', label: 'Static' },
+  ]) {
+    const opt = document.createElement('option');
+    opt.value = o.value;
+    opt.textContent = o.label;
+    sel.append(opt);
+  }
+  sel.value = value;
+  sel.addEventListener('change', () => onChange(sel.value as StatusAnim | ''));
   return sel;
 }
 

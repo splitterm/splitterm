@@ -48,8 +48,8 @@ try {
   await win.locator('.settings-dialog button[data-category="profiles"]').click();
   await sleep(300);
   await win.locator('.settings-dialog input[placeholder^="Name"]').fill('Claude');
-  // The add-form shell select (the default-profile picker is a separate select outside the form).
-  const shellSel = win.locator('.settings-dialog form select');
+  // The add-form shell select (the default-profile picker + the status Animation selects are separate).
+  const shellSel = win.locator('.settings-dialog form select[aria-label="Base shell"]');
   const optionValues = await shellSel.locator('option').evaluateAll((os2) => os2.map((o) => o.value));
   result.shellOptions = optionValues;
   if (optionValues[0]) await shellSel.selectOption(optionValues[0]);

@@ -5,6 +5,8 @@
 import { SquareTerminal, X } from 'lucide';
 import { icon } from './icons';
 import type { PaneInfo } from '@features/tiling';
+import { getSettings } from '@platform/settings-controller';
+import { resolveStatus, type StatusState } from '@shared/domain/status-appearance';
 
 const STATUS_LABEL: Record<string, string> = {
   claudeWorking: 'Working',
@@ -26,6 +28,8 @@ export interface Sidebar {
   isOpen(): boolean;
   /** update the open-terminals list (from tiling.onChange) */
   setSessions(list: PaneInfo[]): void;
+  /** re-render the current list (e.g. after a settings change that affects status appearance) */
+  refresh(): void;
 }
 
 /** `layout` is the body grid element; opening toggles `sidebar-open` on it to animate the columns. */
@@ -127,16 +131,38 @@ export function createSidebar(
       const label = p.title || `Terminal ${index + 1}`;
       const statusLabel = STATUS_LABEL[p.status] ?? '';
       name.textContent = label;
-      rowEl.setAttribute('aria-label', `Focus ${label} — ${statusLabel}`);
       dot.dataset.status = p.status;
-      dot.title = statusLabel;
-      statusText.textContent = STATUS_SHOWS_TEXT.has(p.status) ? statusLabel : '';
-      statusText.dataset.status = p.status;
-      rowEl.classList.toggle('row-claude-working', p.status === 'claudeWorking'); // prominent Claude tint
       rowEl.classList.toggle('bg-[var(--bg-active)]', p.focused);
       rowEl.classList.toggle('text-[var(--text-primary)]', p.focused);
       rowEl.classList.toggle('hover:bg-[var(--bg-hover)]', !p.focused);
       rowEl.classList.toggle('text-[var(--text-secondary)]', !p.focused);
+
+      // Per-pane status appearance: idle is the dim built-in; the four real states resolve through
+      // built-in → global (Appearance) → the pane's profile override (colour / animation / on-off).
+      const s = getSettings();
+      const profileStatus = p.profileId ? s.profiles.find((pr) => pr.id === p.profileId)?.status : undefined;
+
+      if (profileStatus?.enabled === false) {
+        dot.style.display = 'none'; // this profile turns status off entirely (every state, incl. idle)
+        statusText.textContent = '';
+        rowEl.classList.remove('row-claude-working');
+        rowEl.style.removeProperty('--row-claude');
+        rowEl.setAttribute('aria-label', `Focus ${label}`);
+        return;
+      }
+      const state = p.status === 'idle' ? null : (p.status as StatusState);
+      const resolved = state ? resolveStatus(state, profileStatus, s.appearance) : null;
+      dot.style.display = '';
+      dot.style.background = resolved ? resolved.color : ''; // '' → CSS dim for idle
+      dot.classList.toggle('pulse', !!resolved && resolved.animated);
+      dot.title = statusLabel;
+      statusText.textContent = STATUS_SHOWS_TEXT.has(p.status) ? statusLabel : '';
+      statusText.dataset.status = p.status;
+      statusText.style.color = resolved && STATUS_SHOWS_TEXT.has(p.status) ? resolved.color : '';
+      rowEl.classList.toggle('row-claude-working', p.status === 'claudeWorking'); // prominent Claude tint
+      if (p.status === 'claudeWorking' && resolved) rowEl.style.setProperty('--row-claude', resolved.color);
+      else rowEl.style.removeProperty('--row-claude');
+      rowEl.setAttribute('aria-label', `Focus ${label} — ${statusLabel}`);
     };
     return { el: rowEl, update };
   }
@@ -207,6 +233,9 @@ export function createSidebar(
     setSessions(next) {
       sessions = next;
       render();
+    },
+    refresh() {
+      render(); // re-resolve status appearance from the current settings (same sessions)
     },
   };
 }

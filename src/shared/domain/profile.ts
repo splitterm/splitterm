@@ -1,5 +1,7 @@
 // Shell profiles. `ShellProfile` (id + label) is what the new-terminal dropdown lists.
 // `UserProfile` is a saved, user-defined launcher: a base shell + optional startup command + name.
+import type { ProfileStatus } from './status-appearance';
+
 export interface ShellProfile {
   id: string;
   label: string;
@@ -18,4 +20,6 @@ export interface UserProfile {
    * their current behavior.
    */
   restoreCommands?: string[];
+  /** per-profile sidebar status override (colour / animation / on-off); absent = global defaults */
+  status?: ProfileStatus;
 }
