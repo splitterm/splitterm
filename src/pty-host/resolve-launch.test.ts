@@ -33,6 +33,13 @@ describe('resolveLaunch', () => {
     expect(resolve('u2', '', true)).toEqual({ file: 'os-shell', args: ['-l'], startupCommands: ['x'] }); // no restoreCommands → startup
   });
 
+  it('runs NO command sequence in path-only mode (noCommands), even on restore — just the shell', () => {
+    const pathOnly = (id: string, restore: boolean) => resolveLaunch(id, detected, userProfiles, '', () => OS, restore, true);
+    expect(pathOnly('u1', false).file).toBe('pwsh.exe'); // shell still resolved
+    expect(pathOnly('u1', false).startupCommands).toBeUndefined(); // but no startup commands
+    expect(pathOnly('u1', true).startupCommands).toBeUndefined(); // and no restore commands
+  });
+
   it('uses the default profile when no id is given', () => {
     expect(resolve(undefined, 'cmd')).toEqual({ file: 'cmd.exe', args: [] });
     expect(resolve(undefined, 'u1')).toEqual({ file: 'pwsh.exe', args: [], startupCommands: ['claude'] });

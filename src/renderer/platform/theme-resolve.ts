@@ -6,7 +6,10 @@ import type { Settings } from '@shared/domain/settings.schema';
 
 export type ThemeAttr = '' | 'oled' | 'light';
 
-export function resolveThemeAttr(appearance: Settings['appearance'], prefersDark: boolean): ThemeAttr {
+export function resolveThemeAttr(
+  appearance: Pick<Settings['appearance'], 'theme' | 'followOS'>,
+  prefersDark: boolean,
+): ThemeAttr {
   if (appearance.followOS) return prefersDark ? '' : 'light';
   switch (appearance.theme) {
     case 'OLED Black':

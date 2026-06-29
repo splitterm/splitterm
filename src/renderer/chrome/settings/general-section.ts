@@ -25,6 +25,15 @@ export function createGeneralSection(initial: Settings): HTMLElement {
       'Also replay each terminal’s recent output as read-only history on restore. Saves that output ' +
         'to disk (it may contain secrets), so it’s off by default. Needs “Restore previous session”.',
     ),
+    row(
+      'Restore working directory only',
+      toggle({
+        checked: initial.restorePathOnly,
+        onChange: (v) => void ipc.settings.set({ restorePathOnly: v }),
+      }),
+      'Reopen each terminal in its saved folder but don’t re-run the profile’s startup/restore commands ' +
+        '(e.g. a “claude” profile reopens a bare shell in the project, not a new Claude session). Needs “Restore previous session”.',
+    ),
   );
   return el;
 }

@@ -38,7 +38,7 @@ describe('normalize', () => {
   it('preserves a fully valid config unchanged', () => {
     const valid = {
       schemaVersion: 1,
-      appearance: { theme: 'Light', followOS: false, reduceMotion: true },
+      appearance: { theme: 'Light', followOS: false, reduceMotion: true, focusBorderColor: '#ff8800' },
       font: { family: 'Fira Code', size: 16 },
       terminal: {
         scrollback: 5000,
@@ -55,9 +55,29 @@ describe('normalize', () => {
       defaultProfileId: 'p1',
       restoreSession: false,
       restoreScrollback: true,
+      restorePathOnly: true,
       keybindings: { ...DEFAULTS.keybindings, splitRight: 'Ctrl+KeyD' },
     };
     expect(normalize(valid)).toEqual(valid);
+  });
+
+  describe('appearance.focusBorderColor', () => {
+    it('keeps a 6-digit #hex and expands a 3-digit one to #rrggbb', () => {
+      expect(normalize({ appearance: { focusBorderColor: '#ff8800' } }).appearance.focusBorderColor).toBe('#ff8800');
+      expect(normalize({ appearance: { focusBorderColor: '#fa0' } }).appearance.focusBorderColor).toBe('#ffaa00');
+    });
+    it('rejects non-hex so it cannot inject into the CSS var', () => {
+      for (const bad of ['red', 'rgb(1,2,3)', '#xyz', '#1234', 'url(x)', 'blue;}', 42])
+        expect(normalize({ appearance: { focusBorderColor: bad } }).appearance.focusBorderColor).toBe('');
+    });
+    it('defaults to empty', () => expect(normalize({}).appearance.focusBorderColor).toBe(''));
+  });
+
+  describe('restorePathOnly', () => {
+    it('defaults to false', () => expect(normalize({}).restorePathOnly).toBe(false));
+    it('keeps a boolean', () => expect(normalize({ restorePathOnly: true }).restorePathOnly).toBe(true));
+    it.each([1, 'yes', null, {}])('falls back to default for non-boolean %p', (restorePathOnly) =>
+      expect(normalize({ restorePathOnly }).restorePathOnly).toBe(false));
   });
 
   describe('defaultProfileId', () => {
@@ -127,6 +147,7 @@ describe('normalize', () => {
       'font',
       'keybindings',
       'profiles',
+      'restorePathOnly',
       'restoreScrollback',
       'restoreSession',
       'schemaVersion',

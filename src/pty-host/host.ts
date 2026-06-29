@@ -69,7 +69,7 @@ parentPort?.on('message', (e) => {
       break;
     }
     case 'spawn': {
-      const l = resolveLaunch(msg.opts.profileId, fullProfiles, userProfiles, defaultProfileId, resolveShell, msg.opts.restore);
+      const l = resolveLaunch(msg.opts.profileId, fullProfiles, userProfiles, defaultProfileId, resolveShell, msg.opts.restore, msg.opts.noCommands);
       if (hasFirehose()) launch(msg.id, msg.opts, l);
       else pendingSpawns.push({ id: msg.id, opts: msg.opts, launch: l });
       break;

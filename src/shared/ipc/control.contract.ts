@@ -13,6 +13,8 @@ export interface SpawnRequest {
   shellIntegration?: boolean;
   /** this pane is being reopened by session restore — run the profile's restore sequence, not startup */
   restore?: boolean;
+  /** suppress the profile's startup/restore command sequence entirely (restore-path-only mode) */
+  noCommands?: boolean;
 }
 export interface SpawnResponse {
   id: TermId;

@@ -1,7 +1,9 @@
-// Runtime verification of the Claude-working sidebar status. Claude Code shows an "esc to interrupt"
-// hint on screen only while processing; we detect it and surface a prominent 'claudeWorking' status.
-// Put that hint on screen → assert the pane reads claudeWorking + the row is highlighted; clear the
-// screen → assert it reverts (so your own typing is never mistaken for Claude working).
+// Runtime verification of the Claude-working sidebar status (v3, animation-gated). Three things:
+//  (A) ECHO GATE: typing into a pane must NOT show a working indicator.
+//  (B) DETECTION: an ANIMATING "esc to interrupt" footer at the screen bottom (Claude's actual layout)
+//      lights claudeWorking. We simulate it with a plain shell by filling the screen, then repeatedly
+//      printing the affordance with a CHANGING counter (the line keeps changing = animating).
+//  (C) A STATIC "esc to interrupt" line must NOT light it (the cat'd-file / hung-Claude false positive).
 import { _electron as electron } from 'playwright-core';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -26,11 +28,10 @@ async function finish(code) {
   process.exit(code);
 }
 const statusOf = () => win.evaluate(() => document.querySelector('.pane-status-dot')?.getAttribute('data-status') ?? '');
-const rowHighlighted = () => win.evaluate(() => document.querySelectorAll('.row-claude-working').length);
 const waitStatus = async (want, tries) => {
   for (let i = 0; i < tries; i++) {
     if ((await statusOf()) === want) return true;
-    await sleep(150);
+    await sleep(200);
   }
   return false;
 };
@@ -45,28 +46,46 @@ try {
   await win.getByRole('button', { name: 'Toggle sidebar' }).click();
   await sleep(300);
   await win.getByRole('button', { name: 'New terminal' }).click();
-  await sleep(2200); // settle → idle (no hint)
+  await sleep(2400);
   result.statusInitial = await statusOf();
 
-  // Put Claude's "esc to interrupt" hint on screen.
+  // (A) ECHO GATE: typing never flips to working/claudeWorking.
   await win.locator('.xterm-screen').first().click();
   await sleep(150);
-  await win.keyboard.type('Write-Host "working... (esc to interrupt)"');
+  let typingShowedProgress = false;
+  for (const ch of 'echo typing-no-progress'.split('')) {
+    await win.keyboard.type(ch);
+    await sleep(70);
+    const st = await statusOf();
+    if (st === 'working' || st === 'claudeWorking') typingShowedProgress = true;
+  }
+  result.typingStayedCalm = !typingShowedProgress;
   await win.keyboard.press('Enter');
-  result.claudeDetected = await waitStatus('claudeWorking', 25);
-  result.rowHighlighted = await rowHighlighted();
+  await sleep(1500);
 
-  // Clear the screen → hint gone → reverts out of claudeWorking.
-  await win.keyboard.type('Clear-Host');
+  // (C) STATIC affordance must NOT light claudeWorking (fill screen, print one static line, hold).
+  await win.keyboard.type('1..50 | % { Write-Host "" }; Write-Host "static (esc to interrupt) line"');
   await win.keyboard.press('Enter');
-  await sleep(1800);
+  await sleep(3000); // longer than the confirm window — must stay non-claudeWorking
+  result.staticDidNotLight = (await statusOf()) !== 'claudeWorking';
+
+  // (B) ANIMATING affordance at the bottom → claudeWorking.
+  await win.keyboard.type('1..40 | % { Write-Host "" }; 1..18 | % { Write-Host "Forging... ($_ tokens, esc to interrupt)"; Start-Sleep -Milliseconds 220 }');
+  await win.keyboard.press('Enter');
+  result.claudeDetected = await waitStatus('claudeWorking', 30); // during the animating loop
+
+  // Scroll the affordance well off the bottom → no longer present → reverts (out of claudeWorking).
+  await win.keyboard.type("1..80 | % { '.' }");
+  await win.keyboard.press('Enter');
+  result.cleared = await waitStatus('idle', 30); // up to 6s for the GRACE exit
   result.clearedStatus = await statusOf();
 
   const ok =
     result.statusInitial !== 'claudeWorking' &&
+    result.typingStayedCalm &&
+    result.staticDidNotLight &&
     result.claudeDetected &&
-    result.rowHighlighted >= 1 &&
-    result.clearedStatus !== 'claudeWorking';
+    result.cleared;
   result.ok = ok;
   await finish(ok ? 0 : 1);
 } catch (err) {

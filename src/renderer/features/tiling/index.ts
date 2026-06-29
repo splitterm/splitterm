@@ -755,6 +755,7 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     // terminal as it resolves so a mid-build spawn failure — or the user opening a terminal during the
     // async window — can dispose them instead of leaking a pty.
     const sessionLeaves = collectLeaves(session.root); // document order = stable creation order
+    const pathOnly = getSettings().restorePathOnly; // restore the cwd but skip the profile's commands
     const created: Array<{ id: string; termId: LeafNode['termId'] }> = [];
     const discard = (): void => {
       for (const c of created) {
@@ -771,8 +772,8 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     const settled = await Promise.allSettled(
       sessionLeaves.map(async (ln) => {
         const meta = session.leaves[ln.id] ?? {};
-        // restore → profile's restore sequence; replay saved scrollback as read-only history
-        const { termId } = await createTerminal(meta.profileId, meta.title ?? '', meta.cwd, true, meta.scrollback);
+        // restore → profile's restore sequence (unless path-only); replay saved scrollback as history
+        const { termId } = await createTerminal(meta.profileId, meta.title ?? '', meta.cwd, true, meta.scrollback, pathOnly);
         created.push({ id: ln.id, termId }); // track the moment it exists, for cleanup
       }),
     );

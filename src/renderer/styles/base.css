@@ -95,7 +95,7 @@ body {
   height: 100%;
 }
 .pane-focused .term-pane {
-  border-color: var(--accent);
+  border-color: var(--pane-focus, var(--accent)); /* user-customizable focus colour, falls back to accent */
 }
 .drop-target .term-pane {
   border-color: var(--accent);

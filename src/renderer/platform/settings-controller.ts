@@ -23,6 +23,9 @@ function applyAppearance(s: Settings): void {
   else delete html.dataset.theme;
   if (s.appearance.reduceMotion) html.dataset.reduceMotion = 'true';
   else delete html.dataset.reduceMotion;
+  // Focused-pane border colour: a user #hex overrides the theme accent (validated in normalize()).
+  if (s.appearance.focusBorderColor) html.style.setProperty('--pane-focus', s.appearance.focusBorderColor);
+  else html.style.removeProperty('--pane-focus');
 }
 
 function applyToTerminals(s: Settings): void {
