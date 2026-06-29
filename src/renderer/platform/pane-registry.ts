@@ -5,11 +5,12 @@ import type { TermId } from '@shared/ids';
 import type { Settings } from '@shared/domain/settings.schema';
 
 /**
- * A pane's live activity, derived from the firehose (not by parsing program output): `working` =
- * output streaming, `attention` = the shell rang the bell and went quiet (a tool — e.g. Claude Code —
- * signalling it needs you), `idle` = quiet, `exited` = the process ended.
+ * A pane's live activity: `claudeWorking` = Claude Code is actively processing a turn (detected from
+ * its on-screen "esc to interrupt" hint) — shown prominently in Claude's colour; `working` = generic
+ * output is streaming; `attention` = the shell rang the bell and went quiet (a tool signalling it needs
+ * you); `idle` = quiet; `exited` = the process ended.
  */
-export type PaneStatus = 'working' | 'attention' | 'idle' | 'exited';
+export type PaneStatus = 'claudeWorking' | 'working' | 'attention' | 'idle' | 'exited';
 
 export interface PaneHandle {
   /** stable element the tiling engine re-parents between cells (never remounted) */

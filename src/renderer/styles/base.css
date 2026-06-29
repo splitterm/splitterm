@@ -256,6 +256,20 @@ html[data-reduce-motion='true'] {
   background: var(--accent);
   animation: pane-status-pulse 1.2s var(--ease-out) infinite;
 }
+/* Claude Code is actively working — Claude's coral, prominent: pulsing dot, coloured label, and a row
+   accent/wash so a working Claude is obvious at a glance (distinct from generic activity above). */
+.pane-status-dot[data-status='claudeWorking'] {
+  background: #d97757;
+  animation: pane-status-pulse 1.2s var(--ease-out) infinite;
+}
+.pane-status-text[data-status='claudeWorking'] {
+  color: #d97757;
+  font-weight: 600;
+}
+.row-claude-working {
+  box-shadow: inset 2px 0 0 #d97757;
+  background: color-mix(in srgb, #d97757 13%, transparent) !important;
+}
 .pane-status-dot[data-status='attention'],
 .pane-status-text[data-status='attention'] {
   color: #e0a83b;
@@ -278,11 +292,13 @@ html[data-reduce-motion='true'] {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pane-status-dot[data-status='working'] {
+  .pane-status-dot[data-status='working'],
+  .pane-status-dot[data-status='claudeWorking'] {
     animation: none;
   }
 }
-html[data-reduce-motion='true'] .pane-status-dot[data-status='working'] {
+html[data-reduce-motion='true'] .pane-status-dot[data-status='working'],
+html[data-reduce-motion='true'] .pane-status-dot[data-status='claudeWorking'] {
   animation: none;
 }
 

@@ -133,13 +133,16 @@ export async function createTerminal(
     term.write('\r\n\x1b[1;31m[pty-host unavailable — restart splitterm to use terminals again.]\x1b[0m\r\n');
   }
 
-  // Live activity status (shown in the Sessions sidebar). Derived from the firehose — no output
-  // parsing: streaming output ⇒ 'working'; quiet ⇒ 'idle' (or 'attention' if the shell rang the bell
-  // since, e.g. Claude Code signalling it needs you); exit ⇒ 'exited'. For a Claude pane this reads as
-  // thinking → working, your-turn → idle/attention, done → exited.
+  // Live activity status (shown in the Sessions sidebar). Mostly firehose-derived: streaming output ⇒
+  // 'working'; quiet ⇒ 'idle' (or 'attention' if the shell rang the bell since); exit ⇒ 'exited'. ON
+  // TOP, we surface Claude Code specifically: while it processes a turn it shows an "esc to interrupt"
+  // hint on screen, so when that's present the pane is 'claudeWorking' (rendered in Claude's colour) —
+  // distinct from generic activity, so your own typing isn't mistaken for Claude working.
   let status: PaneStatus = 'idle';
   let belled = false;
+  let claudeWorking = false;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let scanTimer: ReturnType<typeof setTimeout> | undefined;
   // Count of term.write() calls still being parsed. xterm fires onData both for genuine user input AND
   // for its automatic replies to host queries (cursor-position/device-attributes/colour) — but those
   // replies are generated WHILE PARSING program output, i.e. inside an in-flight write. So onData with
@@ -151,12 +154,53 @@ export async function createTerminal(
     status = s;
     notifyPaneStatusChange(id);
   };
-  const markOutput = (): void => {
-    if (status === 'exited') return; // 'exited' is terminal — no later data resurrects a dead pane
-    if (status !== 'working') belled = false; // a fresh output burst → drop a stale bell from a prior turn
-    setStatus('working');
+  const armIdle = (): void => {
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => setStatus(belled ? 'attention' : 'idle'), ACTIVE_IDLE_MS);
+  };
+  const markOutput = (): void => {
+    if (status === 'exited') return; // 'exited' is terminal — no later data resurrects a dead pane
+    if (status !== 'working' && status !== 'claudeWorking') belled = false; // fresh burst → drop a stale bell
+    scheduleScan(); // re-check the Claude "esc to interrupt" hint
+    if (claudeWorking) {
+      setStatus('claudeWorking');
+      clearTimeout(idleTimer); // Claude is working — no idle timeout while the hint is on screen
+      return;
+    }
+    setStatus('working');
+    armIdle();
+  };
+  // Claude Code shows "esc to interrupt" only while processing a turn. Scan the visible rows (throttled)
+  // for it; when it flips, switch into/out of the prominent 'claudeWorking' state.
+  const CLAUDE_WORKING_RE = /esc to interrupt/i;
+  const hasClaudeHint = (): boolean => {
+    const buf = term.buffer.active;
+    const from = Math.max(0, buf.length - term.rows); // only the visible screen (the status line lives there)
+    for (let y = from; y < buf.length; y++) {
+      const line = buf.getLine(y);
+      if (line && CLAUDE_WORKING_RE.test(line.translateToString(true))) return true;
+    }
+    return false;
+  };
+  const scanClaude = (): void => {
+    if (status === 'exited') return;
+    const found = hasClaudeHint();
+    if (found === claudeWorking) return;
+    claudeWorking = found;
+    if (found) {
+      setStatus('claudeWorking');
+      clearTimeout(idleTimer);
+    } else {
+      setStatus('working'); // Claude finished → brief 'working' then idle/attention via the timer
+      armIdle();
+    }
+  };
+  const scheduleScan = (): void => {
+    if (scanTimer) return; // throttle: at most one scan per window, so a busy spinner still gets sampled
+    scanTimer = setTimeout(() => {
+      scanTimer = undefined;
+      scanClaude();
+    }, 200);
   };
   const bellEvt = term.onBell(() => {
     belled = true; // a tool finished / wants attention; resolves to 'attention' once output goes quiet
@@ -282,6 +326,7 @@ export async function createTerminal(
     dispose: () => {
       observer.disconnect();
       clearTimeout(idleTimer);
+      clearTimeout(scanTimer);
       osc7.dispose();
       titleEvt.dispose();
       bellEvt.dispose();

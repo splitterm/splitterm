@@ -7,11 +7,15 @@ import { icon } from './icons';
 import type { PaneInfo } from '@features/tiling';
 
 const STATUS_LABEL: Record<string, string> = {
-  working: 'Working',
+  claudeWorking: 'Working',
+  working: 'Active',
   attention: 'Needs input',
   idle: 'Idle',
   exited: 'Exited',
 };
+// Which statuses show a text label next to the dot. Generic 'working' (e.g. your own typing echoing)
+// is deliberately label-less — only Claude working / needs-input / exited get a prominent word.
+const STATUS_SHOWS_TEXT = new Set(['claudeWorking', 'attention', 'exited']);
 
 export interface Sidebar {
   /** the sidebar column content; mount as the body grid's first child */
@@ -126,8 +130,9 @@ export function createSidebar(
       rowEl.setAttribute('aria-label', `Focus ${label} — ${statusLabel}`);
       dot.dataset.status = p.status;
       dot.title = statusLabel;
-      statusText.textContent = p.status === 'idle' ? '' : statusLabel;
+      statusText.textContent = STATUS_SHOWS_TEXT.has(p.status) ? statusLabel : '';
       statusText.dataset.status = p.status;
+      rowEl.classList.toggle('row-claude-working', p.status === 'claudeWorking'); // prominent Claude tint
       rowEl.classList.toggle('bg-[var(--bg-active)]', p.focused);
       rowEl.classList.toggle('text-[var(--text-primary)]', p.focused);
       rowEl.classList.toggle('hover:bg-[var(--bg-hover)]', !p.focused);
