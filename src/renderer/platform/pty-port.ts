@@ -45,7 +45,10 @@ const HOST_CRASH_BANNER = '\r\n\x1b[1;31m[pty-host crashed — this terminal end
  * so a second crash only banners panes that are actually live, and stale handlers don't accumulate.
  */
 function failAll(): void {
-  for (const handler of handlers.values()) handler.onData(HOST_CRASH_BANNER);
+  for (const handler of handlers.values()) {
+    handler.onData(HOST_CRASH_BANNER);
+    handler.onExit(-1); // no real exit will arrive over the dead port — mark the pane dead (status: exited)
+  }
   handlers.clear();
   pending.clear();
 }

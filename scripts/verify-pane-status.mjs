@@ -63,11 +63,19 @@ try {
   await sleep(3000);
   result.attentionAfterBell = await statusOf();
 
+  // The user responds (types): attention clears, and the next quiet must be 'idle', NOT a sticky
+  // 'attention' from the earlier bell (regression guard for the belled-flag reset fix).
+  await win.keyboard.type('echo responded');
+  await win.keyboard.press('Enter');
+  await sleep(4000);
+  result.idleAfterResponse = await statusOf();
+
   const ok =
     result.idleInitial === 'idle' &&
     result.sawWorking &&
     result.idleAfter === 'idle' &&
-    result.attentionAfterBell === 'attention';
+    result.attentionAfterBell === 'attention' &&
+    result.idleAfterResponse === 'idle';
   result.ok = ok;
   await finish(ok ? 0 : 1);
 } catch (err) {

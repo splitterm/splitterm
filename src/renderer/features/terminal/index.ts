@@ -145,12 +145,15 @@ export async function createTerminal(
     notifyPaneStatusChange(id);
   };
   const markOutput = (): void => {
+    if (status === 'exited') return; // 'exited' is terminal — no later data resurrects a dead pane
+    if (status !== 'working') belled = false; // a fresh output burst → drop a stale bell from a prior turn
     setStatus('working');
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => setStatus(belled ? 'attention' : 'idle'), ACTIVE_IDLE_MS);
   };
   const bellEvt = term.onBell(() => {
     belled = true; // a tool finished / wants attention; resolves to 'attention' once output goes quiet
+    if (status === 'idle') setStatus('attention'); // ...or right away if the pane was already quiet
   });
 
   registerTerminal(
@@ -167,10 +170,10 @@ export async function createTerminal(
     },
   );
   term.onData((d) => {
-    if (status === 'attention') {
-      belled = false; // the user is responding — clear the attention flag
-      setStatus('idle');
-    }
+    // The user is engaging — clear any pending bell (even during the post-bell 'working' window, so a
+    // stale bell can't surface as a spurious 'attention' later) and drop an active 'attention'.
+    belled = false;
+    if (status === 'attention') setStatus('idle');
     writeToPty(id, d);
   });
 
