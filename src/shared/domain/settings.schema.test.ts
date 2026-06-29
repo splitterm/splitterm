@@ -38,7 +38,7 @@ describe('normalize', () => {
   it('preserves a fully valid config unchanged', () => {
     const valid = {
       schemaVersion: 1,
-      appearance: { theme: 'Light', followOS: false, reduceMotion: true },
+      appearance: { theme: 'Light', followOS: false, reduceMotion: true, focusBorderColor: '#ff8800' },
       font: { family: 'Fira Code', size: 16 },
       terminal: {
         scrollback: 5000,
@@ -58,6 +58,18 @@ describe('normalize', () => {
       keybindings: { ...DEFAULTS.keybindings, splitRight: 'Ctrl+KeyD' },
     };
     expect(normalize(valid)).toEqual(valid);
+  });
+
+  describe('appearance.focusBorderColor', () => {
+    it('keeps a valid #hex (#rgb or #rrggbb)', () => {
+      expect(normalize({ appearance: { focusBorderColor: '#ff8800' } }).appearance.focusBorderColor).toBe('#ff8800');
+      expect(normalize({ appearance: { focusBorderColor: '#fa0' } }).appearance.focusBorderColor).toBe('#fa0');
+    });
+    it('rejects non-hex so it cannot inject into the CSS var', () => {
+      for (const bad of ['red', 'rgb(1,2,3)', '#xyz', '#1234', 'url(x)', 'blue;}', 42])
+        expect(normalize({ appearance: { focusBorderColor: bad } }).appearance.focusBorderColor).toBe('');
+    });
+    it('defaults to empty', () => expect(normalize({}).appearance.focusBorderColor).toBe(''));
   });
 
   describe('defaultProfileId', () => {

@@ -103,6 +103,32 @@ export function textControl(opts: {
   return el;
 }
 
+/**
+ * A colour swatch (#hex) with a "Default" reset. `value` of '' means "use the theme default", in which
+ * case the swatch previews `fallback`; onChange fires '' on reset, else the picked #rrggbb.
+ */
+export function colorControl(opts: { value: string; fallback: string; onChange: (value: string) => void }): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'flex items-center gap-2';
+  const input = document.createElement('input');
+  input.type = 'color';
+  input.value = opts.value || opts.fallback;
+  input.className = 'h-7 w-9 rounded-[var(--r-sm)] border border-[var(--border)] bg-[var(--bg-input)] cursor-pointer p-0';
+  input.addEventListener('input', () => opts.onChange(input.value));
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.textContent = 'Default';
+  reset.className =
+    'h-7 px-2 rounded-[var(--r-sm)] border border-[var(--border)] text-[11px] cursor-pointer ' +
+    'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]';
+  reset.addEventListener('click', () => {
+    input.value = opts.fallback;
+    opts.onChange('');
+  });
+  wrap.append(input, reset);
+  return wrap;
+}
+
 /** A multi-line text field (one value per line). Used for profile command sequences. */
 export function textareaControl(opts: {
   value: string;

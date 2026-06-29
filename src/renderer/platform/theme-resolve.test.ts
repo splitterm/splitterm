@@ -10,8 +10,8 @@ describe('resolveThemeAttr', () => {
   });
 
   it('followOS never selects OLED (manual-only)', () => {
-    expect(resolveThemeAttr({ theme: 'OLED Black', followOS: true, reduceMotion: false }, true)).toBe('');
-    expect(resolveThemeAttr({ theme: 'OLED Black', followOS: true, reduceMotion: false }, false)).toBe('light');
+    expect(resolveThemeAttr({ theme: 'OLED Black', followOS: true }, true)).toBe('');
+    expect(resolveThemeAttr({ theme: 'OLED Black', followOS: true }, false)).toBe('light');
   });
 
   it('maps the explicit theme when not following the OS', () => {

@@ -16,6 +16,8 @@ export interface Settings {
     followOS: boolean;
     /** collapse motion tokens to 0ms (also honors prefers-reduced-motion) */
     reduceMotion: boolean;
+    /** border colour of the focused pane as a #hex; '' = use the theme accent (default) */
+    focusBorderColor: string;
   };
   font: {
     family: string;
@@ -56,7 +58,7 @@ export interface Settings {
 
 export const DEFAULTS: Settings = {
   schemaVersion: 1,
-  appearance: { theme: 'JetBrains Dark', followOS: true, reduceMotion: false },
+  appearance: { theme: 'JetBrains Dark', followOS: true, reduceMotion: false, focusBorderColor: '' },
   font: { family: 'JetBrains Mono, Cascadia Code, ui-monospace, monospace', size: 13 },
   terminal: {
     scrollback: 1000,
@@ -118,6 +120,10 @@ const str = (v: unknown, fallback: string): string =>
 
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
 
+// A #hex colour (#rgb or #rrggbb) or '' (meaning "use the theme default"). Anything else → ''. This is
+// a trust boundary: the value is written into a CSS custom property, so only a strict hex is allowed.
+const hexColor = (v: unknown): string => (typeof v === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v) ? v : '');
+
 const num = (v: unknown, fallback: number, min: number, max: number): number =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
 
@@ -169,6 +175,7 @@ export function normalize(input: unknown): Settings {
       theme: str(appearance.theme, DEFAULTS.appearance.theme),
       followOS: bool(appearance.followOS, DEFAULTS.appearance.followOS),
       reduceMotion: bool(appearance.reduceMotion, DEFAULTS.appearance.reduceMotion),
+      focusBorderColor: hexColor(appearance.focusBorderColor),
     },
     font: {
       family: str(font.family, DEFAULTS.font.family),
