@@ -158,7 +158,10 @@ export function createSidebar(
       dot.title = statusLabel;
       statusText.textContent = STATUS_SHOWS_TEXT.has(p.status) ? statusLabel : '';
       statusText.dataset.status = p.status;
-      statusText.style.color = resolved && STATUS_SHOWS_TEXT.has(p.status) ? resolved.color : '';
+      // Colour the word only for the attention-worthy states (matches the prior design); 'exited' keeps
+      // the calm dim label — its red dot already signals the exit without an alarming red word.
+      const coloured = p.status === 'claudeWorking' || p.status === 'attention';
+      statusText.style.color = resolved && coloured ? resolved.color : '';
       rowEl.classList.toggle('row-claude-working', p.status === 'claudeWorking'); // prominent Claude tint
       if (p.status === 'claudeWorking' && resolved) rowEl.style.setProperty('--row-claude', resolved.color);
       else rowEl.style.removeProperty('--row-claude');
