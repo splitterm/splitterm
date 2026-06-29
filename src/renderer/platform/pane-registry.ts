@@ -24,6 +24,8 @@ export interface PaneHandle {
   fit(): void;
   /** write input to this pane's PTY (used by broadcast-input to mirror keystrokes to every pane) */
   write(data: string): void;
+  /** paste text into this pane (honors its own bracketed-paste mode) — used by broadcast paste */
+  paste(data: string): void;
   /** the latest working directory the shell reported (OSC 7); undefined if never reported */
   cwd(): string | undefined;
   /** re-apply live settings (font / cursor / scrollback + theme) to the terminal */

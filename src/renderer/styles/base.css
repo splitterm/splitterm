@@ -238,9 +238,10 @@ html[data-reduce-motion='true'] {
 .statusbar__broadcast:hover {
   filter: brightness(1.08);
 }
+/* Tint via box-shadow only — NOT border-color — so the focused pane's accent border still shows
+   through (you must always be able to tell which pane has focus, even in this dangerous mode). */
 .terminal-host.broadcasting .term-pane {
-  border-color: #e0843b;
-  box-shadow: inset 0 0 0 1px #e0843b;
+  box-shadow: inset 0 0 0 2px #e0843b;
 }
 
 /* Sessions sidebar — per-pane activity dot. working = pulsing accent, attention = amber, idle = dim,

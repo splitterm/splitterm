@@ -67,7 +67,7 @@ try {
   // Type in pane 0 → must appear in BOTH panes.
   await win.locator('[data-leaf-id]').nth(0).locator('.xterm-screen').click();
   await sleep(150);
-  await win.keyboard.type('echo BCASTMARKER');
+  await win.keyboard.type('echo BCASTMARKER', { delay: 60 }); // human cadence (echoes settle between keys)
   await win.keyboard.press('Enter');
   result.broadcastReachedBoth = await bothHave('BCASTMARKER');
 

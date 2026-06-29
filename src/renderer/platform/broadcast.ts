@@ -3,6 +3,11 @@
 // sessions) in lockstep. OFF by default and never persisted; a prominent indicator shows when active,
 // since it routes your typing everywhere. This module is just the shared flag + an observer the
 // terminal input path and the chrome indicator both read.
+//
+// Limitation (shared with tmux synchronize-panes): keystrokes are mirrored as the focused pane's
+// already-encoded bytes, so a special key (arrows, Home/End) whose encoding depends on terminal mode
+// — application-cursor-keys etc. — follows the FOCUSED pane's mode in every pane. Plain typing and
+// pastes (re-pasted per-pane to honor each pane's bracketed-paste mode) are unaffected.
 
 let broadcasting = false;
 const listeners = new Set<(on: boolean) => void>();

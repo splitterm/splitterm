@@ -9,6 +9,8 @@
 import type { Terminal } from '@xterm/xterm';
 import { Copy, ClipboardPaste, TextSelect, type IconNode } from 'lucide';
 import { ipc } from '@platform/ipc-client';
+import { allPanes } from '@platform/pane-registry';
+import { isBroadcasting } from '@platform/broadcast';
 import { icon } from './icon';
 
 export interface TerminalClipboard {
@@ -23,7 +25,11 @@ export function createTerminalClipboard(term: Terminal, el: HTMLElement): Termin
   }
   async function paste(): Promise<void> {
     const text = await ipc.clipboard.readText().catch(() => '');
-    if (text) term.paste(text); // honors bracketed-paste mode
+    if (!text) return;
+    // Broadcast: paste into every pane via its OWN term.paste, so each applies its own bracketed-paste
+    // mode (rather than re-sending the focused pane's already-wrapped bytes). Includes this pane.
+    if (isBroadcasting()) for (const p of allPanes()) p.paste(text);
+    else term.paste(text); // honors bracketed-paste mode
   }
 
   // ---- right-click context menu ----
