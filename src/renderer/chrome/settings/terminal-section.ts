@@ -21,7 +21,7 @@ export function createTerminalSection(initial: Settings): HTMLElement {
       'Font family',
       textControl({
         value: local.font.family,
-        placeholder: 'JetBrains Mono, monospace',
+        placeholder: 'Cascadia Code, monospace',
         onChange: (v) => {
           local.font.family = v.trim() || local.font.family;
           saveFont();

@@ -4,7 +4,7 @@ import { ipc } from '@platform/ipc-client';
 import type { Settings, ThemeName } from '@shared/domain/settings.schema';
 import { row, sectionHeading, selectControl, toggle, colorControl } from './controls';
 
-// The native colour input needs a #rrggbb value; fall back to the theme accent (or JetBrains blue if
+// The colour swatch needs a #rrggbb value; fall back to the theme accent (or a default blue if
 // the computed token isn't a 6-digit hex) so the swatch previews the current default.
 function accentHex(): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
@@ -22,7 +22,7 @@ export function createAppearanceSection(initial: Settings): HTMLElement {
     value: local.appearance.theme,
     disabled: local.appearance.followOS,
     options: [
-      { value: 'JetBrains Dark', label: 'JetBrains Dark' },
+      { value: 'Dark', label: 'Dark' },
       { value: 'OLED Black', label: 'OLED Black' },
       { value: 'Light', label: 'Light' },
     ],
@@ -60,7 +60,7 @@ export function createAppearanceSection(initial: Settings): HTMLElement {
 
   el.append(
     sectionHeading('Theme'),
-    row('Sync with OS', followToggle, 'Match the system, switching between JetBrains Dark and Light.'),
+    row('Sync with OS', followToggle, 'Match the system, switching between Dark and Light.'),
     row('Theme', themeSelect, 'OLED Black (true black) is manual-only — turn off OS sync to pick it.'),
     sectionHeading('Panes'),
     row('Focused pane border', focusColor, 'Colour of the outline around the active terminal. Default follows the theme accent.'),

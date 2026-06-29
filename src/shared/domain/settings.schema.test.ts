@@ -4,7 +4,7 @@ import { DEFAULTS, normalize } from './settings.schema';
 describe('settings schema', () => {
   it('ships sane defaults', () => {
     expect(DEFAULTS.schemaVersion).toBe(1);
-    expect(DEFAULTS.appearance.theme).toBe('JetBrains Dark');
+    expect(DEFAULTS.appearance.theme).toBe('Dark');
     expect(DEFAULTS.appearance.followOS).toBe(true);
     expect(DEFAULTS.terminal.scrollback).toBeGreaterThan(0);
     expect(DEFAULTS.font.size).toBeGreaterThan(0);
@@ -59,6 +59,13 @@ describe('normalize', () => {
       keybindings: { ...DEFAULTS.keybindings, splitRight: 'Ctrl+KeyD' },
     };
     expect(normalize(valid)).toEqual(valid);
+  });
+
+  describe('appearance.theme migration', () => {
+    it('migrates the old "JetBrains Dark" name to "Dark"', () =>
+      expect(normalize({ appearance: { theme: 'JetBrains Dark' } }).appearance.theme).toBe('Dark'));
+    it('keeps current theme names', () =>
+      expect(normalize({ appearance: { theme: 'OLED Black' } }).appearance.theme).toBe('OLED Black'));
   });
 
   describe('appearance.focusBorderColor', () => {

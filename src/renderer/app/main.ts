@@ -120,7 +120,7 @@ root.replaceChildren(topbar, body, statusbar);
 document.body.appendChild(settingsModal.el); // fixed overlay, mounted at the document root
 document.body.appendChild(palette.el);
 
-// Ctrl+, toggles settings (JetBrains/VS Code convention); Ctrl+Shift+P opens the command palette.
+// Ctrl+, toggles settings (VS Code convention); Ctrl+Shift+P opens the command palette.
 // Capture phase so neither reaches xterm. The two top overlays are mutually exclusive (never stacked).
 window.addEventListener(
   'keydown',

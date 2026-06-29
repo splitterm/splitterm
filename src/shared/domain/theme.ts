@@ -27,5 +27,5 @@ export interface ColorScheme {
   brightWhite: string;
 }
 
-export const BUILT_IN_SCHEME_NAMES = ['JetBrains Dark', 'OLED Black', 'Light'] as const;
+export const BUILT_IN_SCHEME_NAMES = ['Dark', 'OLED Black', 'Light'] as const;
 export type BuiltInSchemeName = (typeof BUILT_IN_SCHEME_NAMES)[number];

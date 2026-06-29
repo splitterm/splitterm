@@ -1,4 +1,4 @@
-// The dedicated settings modal: a JetBrains-style dialog with a left category rail and a content
+// The dedicated settings modal: a dialog with a left category rail and a content
 // panel. Opened from the topbar gear or Ctrl+,. Sections write through immediately (live-apply),
 // so there's no Save/Cancel — just Close. Content is (re)built on each open from a fresh snapshot.
 import { Palette, SquareTerminal, Boxes, Keyboard, SlidersHorizontal, X, type IconNode } from 'lucide';
