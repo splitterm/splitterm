@@ -5,7 +5,7 @@ import '@xterm/xterm/css/xterm.css';
 import type { TermId } from '@shared/ids';
 import { ipc } from '@platform/ipc-client';
 import { registerTerminal, unregisterTerminal, writeToPty, resizePty, ackPty, whenPortReady } from '@platform/pty-port';
-import { registerPane, deletePane, notifyPaneTitleChange } from '@platform/pane-registry';
+import { registerPane, deletePane, notifyPaneTitleChange, notifyPaneStatusChange, type PaneStatus } from '@platform/pane-registry';
 import { getSettings } from '@platform/settings-controller';
 import { readTerminalTheme } from './theme';
 import { createTerminalSearch } from './search';
@@ -28,6 +28,9 @@ export interface TerminalInstance {
 // How many scrollback rows to capture per pane for session-restore history — bounds session.json
 // (the trust boundary also caps the stored string).
 const SERIALIZE_SCROLLBACK = 1000;
+
+// How long a pane's output must be quiet before it drops from 'working' to 'idle' (or 'attention').
+const ACTIVE_IDLE_MS = 1200;
 
 export async function createTerminal(
   profileId?: string,
@@ -129,13 +132,50 @@ export async function createTerminal(
     term.write('\r\n\x1b[1;31m[pty-host unavailable — restart splitterm to use terminals again.]\x1b[0m\r\n');
   }
 
+  // Live activity status (shown in the Sessions sidebar). Derived from the firehose — no output
+  // parsing: streaming output ⇒ 'working'; quiet ⇒ 'idle' (or 'attention' if the shell rang the bell
+  // since, e.g. Claude Code signalling it needs you); exit ⇒ 'exited'. For a Claude pane this reads as
+  // thinking → working, your-turn → idle/attention, done → exited.
+  let status: PaneStatus = 'idle';
+  let belled = false;
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  const setStatus = (s: PaneStatus): void => {
+    if (s === status) return;
+    status = s;
+    notifyPaneStatusChange(id);
+  };
+  const markOutput = (): void => {
+    if (status === 'exited') return; // 'exited' is terminal — no later data resurrects a dead pane
+    if (status !== 'working') belled = false; // a fresh output burst → drop a stale bell from a prior turn
+    setStatus('working');
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => setStatus(belled ? 'attention' : 'idle'), ACTIVE_IDLE_MS);
+  };
+  const bellEvt = term.onBell(() => {
+    belled = true; // a tool finished / wants attention; resolves to 'attention' once output goes quiet
+    if (status === 'idle') setStatus('attention'); // ...or right away if the pane was already quiet
+  });
+
   registerTerminal(
     id,
-    (data) => term.write(data, () => ackPty(id, data.length)),
+    (data) => {
+      markOutput();
+      term.write(data, () => ackPty(id, data.length));
+    },
     // Local exit banner — the host session is already gone, so it isn't flow-controlled.
-    (code) => term.write(`\r\n\x1b[90m[process exited: ${code}]\x1b[0m\r\n`),
+    (code) => {
+      clearTimeout(idleTimer);
+      setStatus('exited');
+      term.write(`\r\n\x1b[90m[process exited: ${code}]\x1b[0m\r\n`);
+    },
   );
-  term.onData((d) => writeToPty(id, d));
+  term.onData((d) => {
+    // The user is engaging — clear any pending bell (even during the post-bell 'working' window, so a
+    // stale bell can't surface as a spurious 'attention' later) and drop an active 'attention'.
+    belled = false;
+    if (status === 'attention') setStatus('idle');
+    writeToPty(id, d);
+  });
 
   // Live pane title: track what the shell reports via OSC 0/2 (the running program, cwd, etc.). The
   // display title is this when set, else the profile name; notify the tiling so the chip + sidebar
@@ -201,6 +241,7 @@ export async function createTerminal(
       search.reapply(); // recolor live search highlights if the bar is open
       refit();
     },
+    status: () => status,
     // Capture the buffer for session-restore history. Total — never throws into the caller.
     // `excludeAltBuffer` keeps a full-screen TUI (vim/htop) open at save time from capturing its dead
     // alt-screen (which would leave the restored pane stuck there) — we want the real scrollback.
@@ -222,8 +263,10 @@ export async function createTerminal(
     },
     dispose: () => {
       observer.disconnect();
+      clearTimeout(idleTimer);
       osc7.dispose();
       titleEvt.dispose();
+      bellEvt.dispose();
       search.dispose();
       clip.dispose();
       webgl?.dispose(); // free the GPU context before the terminal so it returns to the budget

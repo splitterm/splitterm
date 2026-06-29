@@ -191,6 +191,48 @@ html[data-reduce-motion='true'] {
   color: var(--text-disabled);
 }
 
+/* Sessions sidebar — per-pane activity dot. working = pulsing accent, attention = amber, idle = dim,
+   exited = muted red. The pulse is disabled under reduce-motion. */
+.pane-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--text-disabled);
+}
+.pane-status-dot[data-status='working'] {
+  background: var(--accent);
+  animation: pane-status-pulse 1.2s var(--ease-out) infinite;
+}
+.pane-status-dot[data-status='attention'],
+.pane-status-text[data-status='attention'] {
+  color: #e0a83b;
+  background: #e0a83b;
+}
+.pane-status-text[data-status='attention'] {
+  background: none;
+}
+.pane-status-dot[data-status='exited'] {
+  background: var(--danger);
+  opacity: 0.65;
+}
+@keyframes pane-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pane-status-dot[data-status='working'] {
+    animation: none;
+  }
+}
+html[data-reduce-motion='true'] .pane-status-dot[data-status='working'] {
+  animation: none;
+}
+
 /* Themed scrollbars (Chromium/Electron). Replaces the default light scrollbar on every scrollable
    surface — settings, the Sessions sidebar, the terminal viewport — with a slim, theme-aware pill.
    Driven by tokens, so it adapts to dark / OLED / light automatically. We style the WebKit pseudo-

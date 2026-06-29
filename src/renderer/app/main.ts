@@ -122,10 +122,10 @@ initSettings()
       clearTimeout(saveTimer);
       saveTimer = setTimeout(persist, 400);
     };
-    // Persist on structural changes only — a live OSC title change ('title') refreshes the sidebar
-    // but isn't part of the saved session, so it must not drive saves (or per-pane scrollback serialize).
+    // Persist on structural changes only — a 'cosmetic' change (live title / activity status) refreshes
+    // the sidebar but isn't part of the saved session, so it must not drive saves (or scrollback serialize).
     tiling.onChange((_list, reason) => {
-      if (reason !== 'title') scheduleSave();
+      if (reason !== 'cosmetic') scheduleSave();
     });
     window.addEventListener('pagehide', persist); // final save on unload (close/reload)
 

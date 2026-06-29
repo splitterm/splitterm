@@ -6,6 +6,13 @@ import { SquareTerminal, X } from 'lucide';
 import { icon } from './icons';
 import type { PaneInfo } from '@features/tiling';
 
+const STATUS_LABEL: Record<string, string> = {
+  working: 'Working',
+  attention: 'Needs input',
+  idle: 'Idle',
+  exited: 'Exited',
+};
+
 export interface Sidebar {
   /** the sidebar column content; mount as the body grid's first child */
   panel: HTMLElement;
@@ -49,6 +56,10 @@ export function createSidebar(
   panel.append(inner);
 
   let sessions: PaneInfo[] = [];
+  // Rendered rows keyed by leafId (Map keeps render order). A 'cosmetic' refresh (status/title) reuses
+  // these and mutates in place; only a structural change (add/remove/reorder) rebuilds the list — so a
+  // focused row, or a mid-click on the × button, survives the frequent status updates.
+  const rendered = new Map<string, { el: HTMLElement; update: (p: PaneInfo, index: number) => void }>();
 
   function renderEmpty(): void {
     const empty = document.createElement('div');
@@ -63,31 +74,35 @@ export function createSidebar(
     list.replaceChildren(empty);
   }
 
-  function renderRow(p: PaneInfo, index: number): HTMLElement {
-    const label = p.title || `Terminal ${index + 1}`;
+  // Build a row once; `update` mutates only its dynamic bits (title, status dot/word, focus styling)
+  // so a status refresh never recreates the element — leafId is fixed, so the handlers capture it once.
+  function renderRow(leafId: string): { el: HTMLElement; update: (p: PaneInfo, index: number) => void } {
     // A clickable row whose primary action (focus this terminal) must be keyboard-reachable, so it
     // gets role=button + tabindex + Enter/Space — not just a click handler on a bare <div>.
     const rowEl = document.createElement('div');
     rowEl.setAttribute('role', 'button');
     rowEl.tabIndex = 0;
-    rowEl.setAttribute('aria-label', `Focus ${label}`);
     rowEl.className =
       'group flex items-center gap-2 px-2 h-8 rounded-[var(--r-sm)] cursor-pointer ' +
-      'outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)] ' +
-      (p.focused ? 'bg-[var(--bg-active)] text-[var(--text-primary)]' : 'hover:bg-[var(--bg-hover)] text-[var(--text-secondary)]');
-    rowEl.addEventListener('click', () => opts.onFocusPane(p.leafId));
+      'outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]';
+    rowEl.addEventListener('click', () => opts.onFocusPane(leafId));
     rowEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        opts.onFocusPane(p.leafId);
+        opts.onFocusPane(leafId);
       }
     });
 
-    rowEl.append(icon(SquareTerminal, 14));
+    // Leading activity dot: working (pulsing accent) / attention (amber) / idle (dim) / exited (red).
+    const dot = document.createElement('span');
+    dot.className = 'pane-status-dot shrink-0';
+
     const name = document.createElement('span');
     name.className = 'flex-1 min-w-0 truncate text-[12px]';
-    name.textContent = label;
-    rowEl.append(name);
+
+    // A small status word on the right (blank for plain idle to keep the row calm).
+    const statusText = document.createElement('span');
+    statusText.className = 'pane-status-text shrink-0 text-[10px] text-[var(--text-disabled)]';
 
     const close = document.createElement('button');
     close.type = 'button';
@@ -99,18 +114,51 @@ export function createSidebar(
     close.appendChild(icon(X, 12));
     close.addEventListener('click', (e) => {
       e.stopPropagation();
-      opts.onClosePane(p.leafId);
+      opts.onClosePane(leafId);
     });
-    rowEl.append(close);
-    return rowEl;
+
+    rowEl.append(dot, icon(SquareTerminal, 14), name, statusText, close);
+
+    const update = (p: PaneInfo, index: number): void => {
+      const label = p.title || `Terminal ${index + 1}`;
+      const statusLabel = STATUS_LABEL[p.status] ?? '';
+      name.textContent = label;
+      rowEl.setAttribute('aria-label', `Focus ${label} — ${statusLabel}`);
+      dot.dataset.status = p.status;
+      dot.title = statusLabel;
+      statusText.textContent = p.status === 'idle' ? '' : statusLabel;
+      statusText.dataset.status = p.status;
+      rowEl.classList.toggle('bg-[var(--bg-active)]', p.focused);
+      rowEl.classList.toggle('text-[var(--text-primary)]', p.focused);
+      rowEl.classList.toggle('hover:bg-[var(--bg-hover)]', !p.focused);
+      rowEl.classList.toggle('text-[var(--text-secondary)]', !p.focused);
+    };
+    return { el: rowEl, update };
   }
 
   function render(): void {
     if (sessions.length === 0) {
+      rendered.clear();
       renderEmpty();
       return;
     }
-    list.replaceChildren(...sessions.map(renderRow));
+    // Reuse existing rows when the leafId sequence is unchanged (a cosmetic status/title refresh) —
+    // mutate in place. Rebuild only when panes were added/removed/reordered (a structural change).
+    const ids = sessions.map((s) => s.leafId);
+    const prev = [...rendered.keys()];
+    const sameSequence = ids.length === prev.length && ids.every((id, i) => prev[i] === id);
+    if (sameSequence) {
+      sessions.forEach((p, i) => rendered.get(p.leafId)?.update(p, i));
+      return;
+    }
+    rendered.clear();
+    const rows = sessions.map((p, i) => {
+      const row = renderRow(p.leafId);
+      row.update(p, i);
+      rendered.set(p.leafId, row);
+      return row.el;
+    });
+    list.replaceChildren(...rows);
   }
 
   render();

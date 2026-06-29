@@ -4,6 +4,13 @@
 import type { TermId } from '@shared/ids';
 import type { Settings } from '@shared/domain/settings.schema';
 
+/**
+ * A pane's live activity, derived from the firehose (not by parsing program output): `working` =
+ * output streaming, `attention` = the shell rang the bell and went quiet (a tool — e.g. Claude Code —
+ * signalling it needs you), `idle` = quiet, `exited` = the process ended.
+ */
+export type PaneStatus = 'working' | 'attention' | 'idle' | 'exited';
+
 export interface PaneHandle {
   /** stable element the tiling engine re-parents between cells (never remounted) */
   el: HTMLElement;
@@ -21,6 +28,8 @@ export interface PaneHandle {
   applySettings(settings: Settings): void;
   /** serialize the buffer (capped) to a replayable string, for session-restore history; '' if empty */
   serialize(): string;
+  /** live activity status (working / attention / idle / exited) — shown in the Sessions sidebar */
+  status(): PaneStatus;
   dispose(): void;
 }
 
@@ -55,4 +64,19 @@ export function onPaneTitleChange(cb: (id: TermId) => void): () => void {
 /** Notify subscribers that pane `id`'s display title changed. */
 export function notifyPaneTitleChange(id: TermId): void {
   for (const cb of titleListeners) cb(id);
+}
+
+// A pane's activity status changes as its shell produces output / rings the bell / exits. Terminals
+// notify here; the tiling engine subscribes to refresh the Sessions sidebar (coalesced, no save).
+const statusListeners = new Set<(id: TermId) => void>();
+
+/** Subscribe to live pane-status changes. Returns an unsubscribe function. */
+export function onPaneStatusChange(cb: (id: TermId) => void): () => void {
+  statusListeners.add(cb);
+  return () => statusListeners.delete(cb);
+}
+
+/** Notify subscribers that pane `id`'s activity status changed. */
+export function notifyPaneStatusChange(id: TermId): void {
+  for (const cb of statusListeners) cb(id);
 }

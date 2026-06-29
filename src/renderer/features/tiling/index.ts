@@ -3,7 +3,7 @@
 // `fr` ratios live; per-pane ResizeObserver refits. See architecture.md §5, project-structure.md §7.
 import { X, GripVertical, Terminal as TerminalIcon } from 'lucide';
 import { createTerminal } from '@features/terminal';
-import { getPane, onPaneTitleChange } from '@platform/pane-registry';
+import { getPane, onPaneTitleChange, onPaneStatusChange, type PaneStatus } from '@platform/pane-registry';
 import { getSettings } from '@platform/settings-controller';
 import type { TermId } from '@shared/ids';
 import { icon } from '../../chrome/icons';
@@ -33,15 +33,16 @@ export interface PaneInfo {
   leafId: string;
   termId: number;
   title: string;
+  status: PaneStatus;
   focused: boolean;
 }
 
 /**
  * Why the open-terminals list changed. 'structural' = a pane was added/removed/moved/focused (the
- * layout changed → persist it). 'title' = only a pane's live display title changed (cosmetic — the
- * sidebar should refresh, but it must NOT trigger a session save, since the title isn't persisted).
+ * layout changed → persist it). 'cosmetic' = only a pane's live display title or activity status
+ * changed (the sidebar should refresh, but it must NOT trigger a session save — neither is persisted).
  */
-export type ChangeReason = 'structural' | 'title';
+export type ChangeReason = 'structural' | 'cosmetic';
 
 export interface Tiling {
   /** Add a terminal by splitting the largest pane (even tiling). */
@@ -79,7 +80,14 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     for (const id of order) {
       const lf = findLeaf(root, id);
       if (!lf) continue;
-      out.push({ leafId: id, termId: lf.termId, title: getPane(lf.termId)?.displayTitle() ?? '', focused: id === focusedLeafId });
+      const pane = getPane(lf.termId);
+      out.push({
+        leafId: id,
+        termId: lf.termId,
+        title: pane?.displayTitle() ?? '',
+        status: pane?.status() ?? 'idle',
+        focused: id === focusedLeafId,
+      });
     }
     return out;
   }
@@ -811,18 +819,22 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   // ---- lifecycle ----------------------------------------------------------
 
   window.addEventListener('keydown', onKeydown, { capture: true });
-  // Refresh the chip (immediately) + Sessions sidebar (coalesced to one frame, so a title-spamming
-  // shell can't thrash the sidebar rebuild) when a pane's shell reports a new title. The 'title'
-  // reason keeps this off the persistence path — the live title isn't saved.
-  let titleRaf = 0;
-  const unsubscribeTitles = onPaneTitleChange((id) => {
-    updateTitleChip(id);
-    if (titleRaf) return;
-    titleRaf = requestAnimationFrame(() => {
-      titleRaf = 0;
-      emit('title');
+  // Refresh the Sessions sidebar (coalesced to one frame, so a title/status-spamming shell can't
+  // thrash the rebuild) when a pane's live title or activity status changes. The 'cosmetic' reason
+  // keeps this off the persistence path — neither title nor status is saved.
+  let refreshRaf = 0;
+  const scheduleSidebarRefresh = (): void => {
+    if (refreshRaf) return;
+    refreshRaf = requestAnimationFrame(() => {
+      refreshRaf = 0;
+      emit('cosmetic');
     });
+  };
+  const unsubscribeTitles = onPaneTitleChange((id) => {
+    updateTitleChip(id); // the chip shows the title; update it in place immediately
+    scheduleSidebarRefresh();
   });
+  const unsubscribeStatus = onPaneStatusChange(scheduleSidebarRefresh);
   render(); // start empty — the first terminal opens on the first "+" (or Alt+Shift+= / -)
 
   return {
@@ -847,7 +859,8 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     dispose() {
       window.removeEventListener('keydown', onKeydown, { capture: true });
       unsubscribeTitles();
-      if (titleRaf) cancelAnimationFrame(titleRaf);
+      unsubscribeStatus();
+      if (refreshRaf) cancelAnimationFrame(refreshRaf);
       if (root) for (const lf of collectLeaves(root)) getPane(lf.termId)?.dispose();
       container.replaceChildren();
     },
