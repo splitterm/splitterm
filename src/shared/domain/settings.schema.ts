@@ -5,19 +5,26 @@
 import type { UserProfile } from './profile';
 import { KEYBINDINGS, DEFAULT_KEYBINDINGS, normalizeChord, type ActionId } from './keymap';
 
-export type ThemeName = 'JetBrains Dark' | 'OLED Black' | 'Light' | (string & {});
+export type ThemeName = 'Dark' | 'OLED Black' | 'Light' | (string & {});
 
 export interface Settings {
   schemaVersion: number;
   appearance: {
     /** active theme by name (or a user scheme) */
     theme: ThemeName;
-    /** auto-switch between "JetBrains Dark" (OS dark) and "Light" (OS light) */
+    /** auto-switch between "Dark" (OS dark) and "Light" (OS light) */
     followOS: boolean;
     /** collapse motion tokens to 0ms (also honors prefers-reduced-motion) */
     reduceMotion: boolean;
     /** border colour of the focused pane as a #hex; '' = use the theme accent (default) */
     focusBorderColor: string;
+    /** sidebar pane-status dot colours as #hex; '' = use the (vibrant) built-in default for that state */
+    statusColors: {
+      working: string;
+      claudeWorking: string;
+      attention: string;
+      exited: string;
+    };
   };
   font: {
     family: string;
@@ -64,8 +71,14 @@ export interface Settings {
 
 export const DEFAULTS: Settings = {
   schemaVersion: 1,
-  appearance: { theme: 'JetBrains Dark', followOS: true, reduceMotion: false, focusBorderColor: '' },
-  font: { family: 'JetBrains Mono, Cascadia Code, ui-monospace, monospace', size: 13 },
+  appearance: {
+    theme: 'Dark',
+    followOS: true,
+    reduceMotion: false,
+    focusBorderColor: '',
+    statusColors: { working: '', claudeWorking: '', attention: '', exited: '' },
+  },
+  font: { family: 'Cascadia Code, Consolas, ui-monospace, monospace', size: 13 },
   terminal: {
     scrollback: 1000,
     cursorStyle: 'block',
@@ -127,6 +140,9 @@ const str = (v: unknown, fallback: string): string =>
 
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
 
+// Migrate the old built-in theme name to its current name (keeps a pre-existing settings.json valid).
+const migrateTheme = (theme: string): string => (theme === 'JetBrains Dark' ? 'Dark' : theme);
+
 // A #hex colour or '' (meaning "use the theme default"). Anything else → ''. This is a trust boundary:
 // the value is written into a CSS custom property, so only a strict hex passes. A 3-digit #rgb is
 // expanded to #rrggbb so stored values are always 6-digit (the native colour picker only does #rrggbb).
@@ -185,10 +201,16 @@ export function normalize(input: unknown): Settings {
   return {
     schemaVersion: int(root.schemaVersion, DEFAULTS.schemaVersion, 1, Number.MAX_SAFE_INTEGER),
     appearance: {
-      theme: str(appearance.theme, DEFAULTS.appearance.theme),
+      theme: migrateTheme(str(appearance.theme, DEFAULTS.appearance.theme)),
       followOS: bool(appearance.followOS, DEFAULTS.appearance.followOS),
       reduceMotion: bool(appearance.reduceMotion, DEFAULTS.appearance.reduceMotion),
       focusBorderColor: hexColor(appearance.focusBorderColor),
+      statusColors: ((sc) => ({
+        working: hexColor(sc.working),
+        claudeWorking: hexColor(sc.claudeWorking),
+        attention: hexColor(sc.attention),
+        exited: hexColor(sc.exited),
+      }))(isObj(appearance.statusColors) ? appearance.statusColors : {}),
     },
     font: {
       family: str(font.family, DEFAULTS.font.family),

@@ -1,5 +1,13 @@
 // Small form primitives shared by the settings sections — a labeled row, a section heading, and
-// themed select / number / text / toggle controls. Keeps the sections declarative and consistent.
+// themed select / number / text / toggle / colour controls. Keeps the sections declarative.
+import { createColorPicker } from './color-picker';
+
+// Fired on `document` by the settings modal (close / category switch) so any open colour-picker popover
+// tears down with the modal — closing every path, not just the pointer ones.
+const COLOR_POPOVER_DISMISS = 'settings:dismiss-color-popover';
+export function dismissColorPopovers(): void {
+  document.dispatchEvent(new Event(COLOR_POPOVER_DISMISS));
+}
 
 export const FIELD =
   'h-7 px-2 rounded-[var(--r-sm)] border border-[var(--border)] bg-[var(--bg-input)] text-[12px] ' +
@@ -110,22 +118,72 @@ export function textControl(opts: {
 export function colorControl(opts: { value: string; fallback: string; onChange: (value: string) => void }): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'flex items-center gap-2';
-  const input = document.createElement('input');
-  input.type = 'color';
-  input.value = opts.value || opts.fallback;
-  input.className = 'h-7 w-9 rounded-[var(--r-sm)] border border-[var(--border)] bg-[var(--bg-input)] cursor-pointer p-0';
-  input.addEventListener('input', () => opts.onChange(input.value));
+  let current = opts.value || opts.fallback; // the live #hex shown in the swatch
+
+  const swatch = document.createElement('button');
+  swatch.type = 'button';
+  swatch.setAttribute('aria-label', 'Pick a colour');
+  swatch.className = 'h-7 w-9 rounded-[var(--r-sm)] border border-[var(--border)] cursor-pointer';
+  swatch.style.background = current;
+
   const reset = document.createElement('button');
   reset.type = 'button';
   reset.textContent = 'Default';
   reset.className =
     'h-7 px-2 rounded-[var(--r-sm)] border border-[var(--border)] text-[11px] cursor-pointer ' +
     'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]';
-  reset.addEventListener('click', () => {
-    input.value = opts.fallback;
-    opts.onChange('');
+
+  // The picker opens as a popover anchored under the swatch, mounted in the settings overlay so it's
+  // hidden with the modal (+ not clipped by the dialog's overflow). Its lifetime is tied to the modal:
+  // outside pointerdown, swatch re-click, Default, OR a dismiss event the modal fires on close/category
+  // switch (so a keyboard close — Escape / Ctrl+, — can't leave a zombie popover + a leaked listener).
+  let pop: HTMLElement | null = null;
+  const onDocDown = (e: PointerEvent): void => {
+    if (pop && !pop.contains(e.target as Node) && e.target !== swatch) closePop();
+  };
+  function closePop(): void {
+    pop?.remove();
+    pop = null;
+    document.removeEventListener('pointerdown', onDocDown, true);
+    document.removeEventListener(COLOR_POPOVER_DISMISS, closePop);
+  }
+  swatch.addEventListener('click', () => {
+    if (pop) {
+      closePop();
+      return;
+    }
+    const picker = createColorPicker(current, (hex) => {
+      current = hex;
+      swatch.style.background = hex;
+      opts.onChange(hex);
+    });
+    pop = document.createElement('div');
+    pop.className = 'fixed z-[400] p-3 rounded-[var(--r-md)] border border-[var(--border)] bg-[var(--bg-surface)]';
+    pop.style.boxShadow = '0 8px 28px -8px rgba(0,0,0,.55)';
+    pop.append(picker.el);
+    (swatch.closest('.settings-overlay') ?? document.body).append(pop);
+    const r = swatch.getBoundingClientRect();
+    pop.style.left = `${r.left}px`;
+    pop.style.top = `${r.bottom + 6}px`;
+    requestAnimationFrame(() => {
+      if (!pop) return;
+      const pr = pop.getBoundingClientRect();
+      if (pr.right > window.innerWidth - 8) pop.style.left = `${window.innerWidth - pr.width - 8}px`;
+      if (pr.bottom > window.innerHeight - 8) pop.style.top = `${r.top - pr.height - 6}px`;
+      pop.querySelector<HTMLInputElement>('input[aria-label="Hex colour"]')?.focus(); // keyboard entry point
+    });
+    document.addEventListener('pointerdown', onDocDown, true);
+    document.addEventListener(COLOR_POPOVER_DISMISS, closePop);
   });
-  wrap.append(input, reset);
+
+  reset.addEventListener('click', () => {
+    current = opts.fallback;
+    swatch.style.background = current;
+    opts.onChange('');
+    closePop();
+  });
+
+  wrap.append(swatch, reset);
   return wrap;
 }
 

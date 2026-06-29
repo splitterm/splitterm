@@ -1,5 +1,5 @@
 /* Design tokens — single source of truth for chrome + terminal + motion.
- * Default (:root) = JetBrains Dark. Switch theme by flipping <html data-theme>.
+ * Default (:root) = Dark. Switch theme by flipping <html data-theme>.
  * See plans/ui-design.md. */
 
 :root {
@@ -28,7 +28,7 @@
   --success: #5fad65;
   --warning: #e0a02f;
 
-  /* Terminal / ANSI (JetBrains Dark) */
+  /* Terminal / ANSI (Dark) */
   --term-bg: #1e1f22;
   --term-fg: #dfe1e5;
   --term-cursor: #dfe1e5;
@@ -62,7 +62,7 @@
   --ui-font: 'Inter', system-ui, 'Segoe UI', sans-serif;
   --ui-size: 13px;
   --ui-lh: 1.4;
-  --mono-font: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+  --mono-font: 'Cascadia Code', 'Consolas', ui-monospace, monospace;
   --mono-size: 13px;
 
   /* Chrome dimensions */

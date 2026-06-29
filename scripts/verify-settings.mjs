@@ -50,6 +50,8 @@ try {
   // ---- Appearance: turn OFF "Sync with OS", pick OLED Black, enable reduce motion ----
   await win.getByRole('button', { name: 'Open settings' }).click();
   await sleep(300);
+  await win.locator('.settings-dialog button[data-category="appearance"]').click(); // General opens by default now
+  await sleep(300);
   const switches = win.locator('.settings-dialog button[role="switch"]'); // [0]=followOS, [1]=reduceMotion
   if ((await switches.nth(0).getAttribute('aria-checked')) === 'true') {
     await switches.nth(0).click(); // disable OS sync so the theme select is usable

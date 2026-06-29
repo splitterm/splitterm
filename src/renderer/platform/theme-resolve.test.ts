@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { resolveThemeAttr } from './theme-resolve';
 
-const base = { theme: 'JetBrains Dark' as const, followOS: false, reduceMotion: false };
+const base = { theme: 'Dark' as const, followOS: false, reduceMotion: false };
 
 describe('resolveThemeAttr', () => {
-  it('follows the OS: dark -> default (JetBrains Dark), light -> light', () => {
+  it('follows the OS: dark -> default (Dark), light -> light', () => {
     expect(resolveThemeAttr({ ...base, followOS: true }, true)).toBe('');
     expect(resolveThemeAttr({ ...base, followOS: true }, false)).toBe('light');
   });
@@ -15,13 +15,13 @@ describe('resolveThemeAttr', () => {
   });
 
   it('maps the explicit theme when not following the OS', () => {
-    expect(resolveThemeAttr({ ...base, theme: 'JetBrains Dark' }, true)).toBe('');
+    expect(resolveThemeAttr({ ...base, theme: 'Dark' }, true)).toBe('');
     expect(resolveThemeAttr({ ...base, theme: 'OLED Black' }, true)).toBe('oled');
     expect(resolveThemeAttr({ ...base, theme: 'Light' }, true)).toBe('light');
   });
 
   it('ignores the OS preference when not following', () => {
     expect(resolveThemeAttr({ ...base, theme: 'OLED Black' }, false)).toBe('oled');
-    expect(resolveThemeAttr({ ...base, theme: 'JetBrains Dark' }, false)).toBe('');
+    expect(resolveThemeAttr({ ...base, theme: 'Dark' }, false)).toBe('');
   });
 });

@@ -23,9 +23,18 @@ function applyAppearance(s: Settings): void {
   else delete html.dataset.theme;
   if (s.appearance.reduceMotion) html.dataset.reduceMotion = 'true';
   else delete html.dataset.reduceMotion;
-  // Focused-pane border colour: a user #hex overrides the theme accent (validated in normalize()).
-  if (s.appearance.focusBorderColor) html.style.setProperty('--pane-focus', s.appearance.focusBorderColor);
-  else html.style.removeProperty('--pane-focus');
+  // Focused-pane border colour + sidebar status-dot colours: a user #hex sets the CSS var, otherwise
+  // the var is cleared so the built-in (vibrant) default in base.css applies. All validated in normalize().
+  const setVar = (name: string, value: string): void => {
+    if (value) html.style.setProperty(name, value);
+    else html.style.removeProperty(name);
+  };
+  setVar('--pane-focus', s.appearance.focusBorderColor);
+  const sc = s.appearance.statusColors;
+  setVar('--status-working', sc.working);
+  setVar('--status-claude', sc.claudeWorking);
+  setVar('--status-attention', sc.attention);
+  setVar('--status-exited', sc.exited);
 }
 
 function applyToTerminals(s: Settings): void {

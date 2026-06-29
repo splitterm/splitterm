@@ -2,7 +2,7 @@
   "name": "splitterm",
   "productName": "splitterm",
   "version": "1.0.0",
-  "description": "A fast, lean, JetBrains-clean tiling terminal.",
+  "description": "A fast, lean tiling terminal.",
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {

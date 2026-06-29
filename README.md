@@ -1,6 +1,6 @@
 # splitterm
 
-**A fast, lean, JetBrains-clean tiling terminal.**
+**A fast, lean tiling terminal.**
 
 splitterm is an Electron terminal that splits into a tiling grid of panes, each running its own
 shell. It's built around a strict four-process architecture for speed and isolation: terminal output
