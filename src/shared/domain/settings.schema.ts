@@ -52,6 +52,12 @@ export interface Settings {
    * Only has an effect while restoreSession is on.
    */
   restoreScrollback: boolean;
+  /**
+   * on restore, reopen each terminal in its saved working directory but do NOT re-run the profile's
+   * startup/restore command sequence (so e.g. a `claude` profile reopens a bare shell in the project
+   * folder instead of relaunching Claude). Only has an effect while restoreSession is on.
+   */
+  restorePathOnly: boolean;
   /** keyboard chord per tiling action (action id → canonical chord string, e.g. "Alt+Shift+Equal") */
   keybindings: Record<ActionId, string>;
 }
@@ -75,6 +81,7 @@ export const DEFAULTS: Settings = {
   defaultProfileId: '',
   restoreSession: true,
   restoreScrollback: false,
+  restorePathOnly: false,
   keybindings: { ...DEFAULT_KEYBINDINGS },
 };
 
@@ -200,6 +207,7 @@ export function normalize(input: unknown): Settings {
     defaultProfileId: typeof root.defaultProfileId === 'string' ? root.defaultProfileId.slice(0, 200) : '',
     restoreSession: bool(root.restoreSession, DEFAULTS.restoreSession),
     restoreScrollback: bool(root.restoreScrollback, DEFAULTS.restoreScrollback),
+    restorePathOnly: bool(root.restorePathOnly, DEFAULTS.restorePathOnly),
     // Each action gets a valid canonical chord: the stored one if it parses, else the default. Unknown
     // keys are dropped (only the known actions are emitted).
     keybindings: Object.fromEntries(

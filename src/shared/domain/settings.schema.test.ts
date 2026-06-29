@@ -55,6 +55,7 @@ describe('normalize', () => {
       defaultProfileId: 'p1',
       restoreSession: false,
       restoreScrollback: true,
+      restorePathOnly: true,
       keybindings: { ...DEFAULTS.keybindings, splitRight: 'Ctrl+KeyD' },
     };
     expect(normalize(valid)).toEqual(valid);
@@ -70,6 +71,13 @@ describe('normalize', () => {
         expect(normalize({ appearance: { focusBorderColor: bad } }).appearance.focusBorderColor).toBe('');
     });
     it('defaults to empty', () => expect(normalize({}).appearance.focusBorderColor).toBe(''));
+  });
+
+  describe('restorePathOnly', () => {
+    it('defaults to false', () => expect(normalize({}).restorePathOnly).toBe(false));
+    it('keeps a boolean', () => expect(normalize({ restorePathOnly: true }).restorePathOnly).toBe(true));
+    it.each([1, 'yes', null, {}])('falls back to default for non-boolean %p', (restorePathOnly) =>
+      expect(normalize({ restorePathOnly }).restorePathOnly).toBe(false));
   });
 
   describe('defaultProfileId', () => {
@@ -139,6 +147,7 @@ describe('normalize', () => {
       'font',
       'keybindings',
       'profiles',
+      'restorePathOnly',
       'restoreScrollback',
       'restoreSession',
       'schemaVersion',
