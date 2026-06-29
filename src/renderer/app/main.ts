@@ -100,17 +100,22 @@ document.body.appendChild(settingsModal.el); // fixed overlay, mounted at the do
 document.body.appendChild(palette.el);
 
 // Ctrl+, toggles settings (JetBrains/VS Code convention); Ctrl+Shift+P opens the command palette.
-// Capture phase so neither reaches xterm.
+// Capture phase so neither reaches xterm. The two top overlays are mutually exclusive (never stacked).
 window.addEventListener(
   'keydown',
   (e) => {
+    // Don't hijack keys aimed at the settings modal's own inputs — notably the Keyboard rebind capture,
+    // which must receive Ctrl+Shift+P / Ctrl+, to BIND them (the tiling handler exempts these too). This
+    // also means neither shortcut fires while settings is focused, so the palette can't open over it.
+    if (e.target instanceof Element && e.target.closest('.settings-overlay')) return;
     if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.code === 'Comma') {
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation(); // also keep it off the tiling/xterm window listeners
+      palette.close(); // mutual exclusion: don't leave the palette stacked under settings
       settingsModal.toggle();
     } else if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === 'KeyP') {
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       palette.toggle();
     }
   },

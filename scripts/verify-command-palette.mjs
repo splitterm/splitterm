@@ -69,6 +69,16 @@ try {
   await sleep(300);
   result.closedAfterEscape = (await openCount()) === 0;
 
+  // Mutual exclusion: Ctrl+, with the palette open closes it and opens settings (never stacks).
+  await win.keyboard.press('Control+Shift+P');
+  await sleep(300);
+  await win.keyboard.press('Control+Comma');
+  await sleep(400);
+  result.paletteClosedForSettings = (await openCount()) === 0;
+  result.settingsOpened = await win.locator('.settings-overlay.open').count();
+  await win.keyboard.press('Escape');
+  await sleep(300);
+
   const ok =
     result.openVisible >= 1 &&
     result.inputFocused &&
@@ -77,7 +87,9 @@ try {
     result.closedAfterRun &&
     result.paneAfter === result.paneBefore + 1 &&
     result.reopened >= 1 &&
-    result.closedAfterEscape;
+    result.closedAfterEscape &&
+    result.paletteClosedForSettings &&
+    result.settingsOpened >= 1;
   result.ok = ok;
   await finish(ok ? 0 : 1);
 } catch (err) {
