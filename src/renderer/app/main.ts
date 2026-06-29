@@ -12,6 +12,8 @@ import { createTiling, type Tiling } from '@features/tiling';
 import { createTopbar } from '../chrome/topbar';
 import { createSidebar } from '../chrome/sidebar';
 import { createSettingsModal } from '../chrome/settings';
+import { createCommandPalette, type Command } from '../chrome/command-palette';
+import { KEYBINDINGS, ACTION_LABELS, formatChord } from '@shared/domain/keymap';
 
 // Start listening for the PTY firehose port before anything spawns.
 initPortBridge();
@@ -33,10 +35,31 @@ const settingsModal = createSettingsModal();
 const sidebar = createSidebar(body, {
   onFocusPane: (leafId) => tiling?.focusPane(leafId),
   onClosePane: (leafId) => tiling?.closePane(leafId),
-  // Yield Escape to whatever layer owns it: the settings modal, or a focused terminal search bar
-  // (its own bubble-phase Escape closes it; the sidebar must not swallow that keystroke first).
-  isBlocked: () => settingsModal.isOpen() || document.activeElement?.closest('.term-search') != null,
+  // Yield Escape to whatever layer owns it: the settings modal, the command palette, or a focused
+  // terminal search bar (each closes on its own Escape; the sidebar must not swallow it first).
+  isBlocked: () =>
+    settingsModal.isOpen() || palette.isOpen() || document.activeElement?.closest('.term-search') != null,
 });
+
+// Command palette (Ctrl+Shift+P): every tiling action (with its live shortcut) + a few app commands.
+// Built lazily on open so chords reflect the current keybindings and `tiling` is resolved by then.
+const buildCommands = (): Command[] => {
+  const kb = getSettings().keybindings;
+  const appCmds: Command[] = [
+    { id: 'app.newTerminal', title: 'New terminal', run: () => void openDefaultTerminal() },
+    { id: 'app.closeLast', title: 'Close last terminal', run: () => tiling?.removeLast() },
+    { id: 'app.toggleSidebar', title: 'Toggle sidebar', run: () => sidebar.toggle() },
+    { id: 'app.openSettings', title: 'Open settings', hint: 'Ctrl+,', run: () => settingsModal.open() },
+  ];
+  const tilingCmds: Command[] = KEYBINDINGS.map((id) => ({
+    id: `tiling.${id}`,
+    title: ACTION_LABELS[id],
+    hint: formatChord(kb[id]),
+    run: () => tiling?.runAction(id),
+  }));
+  return [...appCmds, ...tilingCmds];
+};
+const palette = createCommandPalette(buildCommands);
 
 const topbar = createTopbar({
   onToggleSidebar: () => sidebar.toggle(),
@@ -74,8 +97,10 @@ statusbar.innerHTML = `
 
 root.replaceChildren(topbar, body, statusbar);
 document.body.appendChild(settingsModal.el); // fixed overlay, mounted at the document root
+document.body.appendChild(palette.el);
 
-// Ctrl+, toggles settings (JetBrains/VS Code convention). Capture phase so it never reaches xterm.
+// Ctrl+, toggles settings (JetBrains/VS Code convention); Ctrl+Shift+P opens the command palette.
+// Capture phase so neither reaches xterm.
 window.addEventListener(
   'keydown',
   (e) => {
@@ -83,6 +108,10 @@ window.addEventListener(
       e.preventDefault();
       e.stopPropagation();
       settingsModal.toggle();
+    } else if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && e.code === 'KeyP') {
+      e.preventDefault();
+      e.stopPropagation();
+      palette.toggle();
     }
   },
   { capture: true },

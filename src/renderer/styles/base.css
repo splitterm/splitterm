@@ -175,6 +175,36 @@ html[data-reduce-motion='true'] {
   transform: none;
 }
 
+/* Command palette: a centered searchable action list over a dimming backdrop. Mirrors the settings
+   overlay's fade + lift (collapsing to instant under reduce-motion via the motion tokens). */
+.command-palette-overlay {
+  background: color-mix(in srgb, var(--bg-app) 55%, transparent);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--motion-fast) var(--ease-out),
+    visibility 0s linear var(--motion-fast);
+}
+.command-palette-overlay.open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+.command-palette-dialog {
+  transform: translateY(8px) scale(0.985);
+  transition: transform var(--motion-base) var(--ease-out);
+  will-change: transform;
+}
+.command-palette-overlay.open .command-palette-dialog {
+  transform: none;
+}
+.command-palette-item:hover {
+  background: var(--bg-hover);
+}
+.command-palette-item.is-selected {
+  background: var(--bg-active);
+}
+
 /* Status bar */
 .statusbar {
   display: flex;

@@ -22,7 +22,7 @@ import {
   equalizeRatios,
 } from '@shared/domain/layout-tree';
 import { pickZone, zoneToSplit, type Zone } from './drop-zone';
-import { chordFromEvent, matchAction } from '@shared/domain/keymap';
+import { chordFromEvent, matchAction, type ActionId } from '@shared/domain/keymap';
 
 const GUTTER = 6; // px — transparent gap between cards; highlights on hover for resize
 const FOCUS_RING = 'pane-focused'; // styled in base.css (accent border on the focused card)
@@ -53,6 +53,8 @@ export interface Tiling {
   focusPane(leafId: string): void;
   /** Close a specific pane (e.g. from the Sessions sidebar). */
   closePane(leafId: string): void;
+  /** Run a tiling action by id (e.g. from the command palette); same effect as its keyboard chord. */
+  runAction(action: ActionId): void;
   /** Subscribe to the open-terminals list; fires immediately with the current snapshot. */
   onChange(cb: (panes: PaneInfo[], reason: ChangeReason) => void): () => void;
   /** Snapshot the layout (tree + per-pane cwd/profile/title) for persistence. */
@@ -667,45 +669,50 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
   // Tiling shortcuts are user-rebindable (Settings → Keyboard). We resolve the pressed chord to an
   // action via the live keybindings, then run it — intercepting in the capture phase so the chord
   // never reaches xterm/the PTY; everything unbound passes straight through.
+  // Run a tiling action by id — shared by the keyboard handler and the command palette. The focus
+  // actions are harmless no-ops with a single pane; splitActive is async (fire-and-forget here).
+  function runAction(action: ActionId): void {
+    switch (action) {
+      case 'splitRight':
+        return void splitActive('row');
+      case 'splitDown':
+        return void splitActive('col');
+      case 'closePane':
+        return closeActive();
+      case 'toggleZoom':
+        return toggleZoom();
+      case 'equalizePanes':
+        return equalizeAll();
+      case 'focusLeft':
+        return focusDir('left');
+      case 'focusRight':
+        return focusDir('right');
+      case 'focusUp':
+        return focusDir('up');
+      case 'focusDown':
+        return focusDir('down');
+      case 'focusNext':
+        return focusCycle(1);
+      case 'focusPrev':
+        return focusCycle(-1);
+    }
+  }
+
   function onKeydown(e: KeyboardEvent): void {
     if (e.repeat || dragging) return; // ignore auto-repeat and keys during a gutter drag
-    // Ignore keys while the settings modal owns focus (this is a window capture-phase listener, so it
-    // would otherwise fire BEFORE the Keyboard section's chord-capture button and run the bound action
-    // — e.g. close a pane — behind the modal, while also stealing the keypress from the rebind UI).
+    // Ignore keys while the settings modal OR command palette owns focus (this is a window capture-phase
+    // listener, so it would otherwise fire BEFORE those overlays' inputs and run a bound action — e.g.
+    // close a pane — behind them, while also stealing the keypress from the overlay).
     const t = e.target;
-    if (t instanceof Element && t.closest('.settings-overlay')) return;
+    if (t instanceof Element && t.closest('.settings-overlay, .command-palette-overlay')) return;
     const chord = chordFromEvent(e);
     if (!chord) return;
     const action = matchAction(chord, getSettings().keybindings);
     if (!action) return;
-    switch (action) {
-      case 'splitRight':
-        return intercept(e, () => void splitActive('row'));
-      case 'splitDown':
-        return intercept(e, () => void splitActive('col'));
-      case 'closePane':
-        return intercept(e, closeActive);
-      case 'toggleZoom':
-        return intercept(e, toggleZoom);
-      case 'equalizePanes':
-        return intercept(e, equalizeAll);
-      case 'focusLeft':
-      case 'focusRight':
-      case 'focusUp':
-      case 'focusDown': {
-        // Directional focus only steals the key when there's more than one pane, so a single-pane
-        // binding (e.g. the default Alt+Arrow) still reaches the shell for word navigation.
-        if (!root || collectLeaves(root).length <= 1) return;
-        const dir = ({ focusLeft: 'left', focusRight: 'right', focusUp: 'up', focusDown: 'down' } as const)[action];
-        return intercept(e, () => focusDir(dir));
-      }
-      case 'focusNext':
-      case 'focusPrev': {
-        // Like directional focus, only intercept with more than one pane.
-        if (!root || collectLeaves(root).length <= 1) return;
-        return intercept(e, () => focusCycle(action === 'focusNext' ? 1 : -1));
-      }
-    }
+    // Focus actions (directional + cycle) only steal the key with more than one pane, so a single-pane
+    // binding (e.g. the default Alt+Arrow) still reaches the shell for word navigation.
+    if (action.startsWith('focus') && (!root || collectLeaves(root).length <= 1)) return;
+    intercept(e, () => runAction(action));
   }
 
   function intercept(e: KeyboardEvent, run: () => void): void {
@@ -846,6 +853,7 @@ export async function createTiling(container: HTMLElement): Promise<Tiling> {
     closePane(leafId) {
       closeById(leafId);
     },
+    runAction,
     onChange(cb) {
       listeners.push(cb);
       cb(snapshot(), 'structural');
