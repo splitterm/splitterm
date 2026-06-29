@@ -14,6 +14,7 @@ import { createSidebar } from '../chrome/sidebar';
 import { createSettingsModal } from '../chrome/settings';
 import { createCommandPalette, type Command } from '../chrome/command-palette';
 import { KEYBINDINGS, ACTION_LABELS, formatChord } from '@shared/domain/keymap';
+import { toggleBroadcasting, setBroadcasting, isBroadcasting, onBroadcastChange } from '@platform/broadcast';
 
 // Start listening for the PTY firehose port before anything spawns.
 initPortBridge();
@@ -49,6 +50,11 @@ const buildCommands = (): Command[] => {
     { id: 'app.newTerminal', title: 'New terminal', run: () => void openDefaultTerminal() },
     { id: 'app.closeLast', title: 'Close last terminal', run: () => tiling?.removeLast() },
     { id: 'app.toggleSidebar', title: 'Toggle sidebar', run: () => sidebar.toggle() },
+    {
+      id: 'app.broadcast',
+      title: isBroadcasting() ? 'Broadcast input: turn off' : 'Broadcast input: turn on (type to all panes)',
+      run: () => toggleBroadcasting(),
+    },
     { id: 'app.openSettings', title: 'Open settings', hint: 'Ctrl+,', run: () => settingsModal.open() },
   ];
   const tilingCmds: Command[] = KEYBINDINGS.map((id) => ({
@@ -94,6 +100,21 @@ statusbar.innerHTML = `
   <span class="statusbar__item" id="shell-status">starting…</span>
   <span class="statusbar__item statusbar__version" id="version"></span>
 `;
+
+// Broadcast-input indicator: hidden until active, then a prominent clickable chip (click to turn off)
+// so it can never silently route your typing to every pane. It also tints the tiles while on.
+const broadcastChip = document.createElement('button');
+broadcastChip.type = 'button';
+broadcastChip.className = 'statusbar__broadcast';
+broadcastChip.hidden = true;
+broadcastChip.textContent = '⊕ Broadcasting to all panes';
+broadcastChip.title = 'Broadcast input is on — click to turn off';
+broadcastChip.addEventListener('click', () => setBroadcasting(false));
+statusbar.querySelector('#shell-status')?.after(broadcastChip);
+onBroadcastChange((on) => {
+  broadcastChip.hidden = !on;
+  tilingHost.classList.toggle('broadcasting', on);
+});
 
 root.replaceChildren(topbar, body, statusbar);
 document.body.appendChild(settingsModal.el); // fixed overlay, mounted at the document root

@@ -22,6 +22,8 @@ export interface PaneHandle {
   profileId?: string;
   focus(): void;
   fit(): void;
+  /** write input to this pane's PTY (used by broadcast-input to mirror keystrokes to every pane) */
+  write(data: string): void;
   /** the latest working directory the shell reported (OSC 7); undefined if never reported */
   cwd(): string | undefined;
   /** re-apply live settings (font / cursor / scrollback + theme) to the terminal */

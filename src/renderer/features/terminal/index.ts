@@ -5,7 +5,8 @@ import '@xterm/xterm/css/xterm.css';
 import type { TermId } from '@shared/ids';
 import { ipc } from '@platform/ipc-client';
 import { registerTerminal, unregisterTerminal, writeToPty, resizePty, ackPty, whenPortReady } from '@platform/pty-port';
-import { registerPane, deletePane, notifyPaneTitleChange, notifyPaneStatusChange, type PaneStatus } from '@platform/pane-registry';
+import { registerPane, deletePane, allPanes, notifyPaneTitleChange, notifyPaneStatusChange, type PaneStatus } from '@platform/pane-registry';
+import { isBroadcasting } from '@platform/broadcast';
 import { getSettings } from '@platform/settings-controller';
 import { readTerminalTheme } from './theme';
 import { createTerminalSearch } from './search';
@@ -174,7 +175,10 @@ export async function createTerminal(
     // stale bell can't surface as a spurious 'attention' later) and drop an active 'attention'.
     belled = false;
     if (status === 'attention') setStatus('idle');
-    writeToPty(id, d);
+    // Broadcast input: mirror keystrokes to every pane's PTY. Only the focused pane's onData fires, so
+    // this single fan-out reaches all panes (including this one) exactly once.
+    if (isBroadcasting()) for (const p of allPanes()) p.write(d);
+    else writeToPty(id, d);
   });
 
   // Live pane title: track what the shell reports via OSC 0/2 (the running program, cwd, etc.). The
@@ -226,6 +230,7 @@ export async function createTerminal(
     profileId,
     focus: () => term.focus(),
     fit: refit,
+    write: (data) => writeToPty(id, data),
     cwd: () => cwd,
     applySettings: (next) => {
       term.options.fontFamily = next.font.family;

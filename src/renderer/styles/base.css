@@ -221,6 +221,28 @@ html[data-reduce-motion='true'] {
   color: var(--text-disabled);
 }
 
+/* Broadcast-input indicator: a clickable caution chip (distinct from the accent focus ring + the amber
+   attention dot) shown only while active; it also tints every tile so the mode is unmistakable. */
+.statusbar__broadcast {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border: none;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #1a1a1a;
+  background: #e0843b;
+  cursor: pointer;
+}
+.statusbar__broadcast:hover {
+  filter: brightness(1.08);
+}
+.terminal-host.broadcasting .term-pane {
+  border-color: #e0843b;
+  box-shadow: inset 0 0 0 1px #e0843b;
+}
+
 /* Sessions sidebar — per-pane activity dot. working = pulsing accent, attention = amber, idle = dim,
    exited = muted red. The pulse is disabled under reduce-motion. */
 .pane-status-dot {
