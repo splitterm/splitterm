@@ -38,7 +38,13 @@ describe('normalize', () => {
   it('preserves a fully valid config unchanged', () => {
     const valid = {
       schemaVersion: 1,
-      appearance: { theme: 'Light', followOS: false, reduceMotion: true, focusBorderColor: '#ff8800' },
+      appearance: {
+        theme: 'Light',
+        followOS: false,
+        reduceMotion: true,
+        focusBorderColor: '#ff8800',
+        statusColors: { working: '#00ff00', claudeWorking: '#ff0000', attention: '#0000ff', exited: '#ffffff' },
+      },
       font: { family: 'Fira Code', size: 16 },
       terminal: {
         scrollback: 5000,
@@ -59,6 +65,18 @@ describe('normalize', () => {
       keybindings: { ...DEFAULTS.keybindings, splitRight: 'Ctrl+KeyD' },
     };
     expect(normalize(valid)).toEqual(valid);
+  });
+
+  describe('appearance.statusColors', () => {
+    it('defaults all to empty', () =>
+      expect(normalize({}).appearance.statusColors).toEqual({ working: '', claudeWorking: '', attention: '', exited: '' }));
+    it('keeps valid #hex and rejects junk', () => {
+      const sc = normalize({ appearance: { statusColors: { working: '#3fb950', attention: 'red', exited: '#zzz' } } }).appearance.statusColors;
+      expect(sc.working).toBe('#3fb950');
+      expect(sc.attention).toBe(''); // not a hex
+      expect(sc.exited).toBe(''); // not a hex
+      expect(sc.claudeWorking).toBe(''); // missing
+    });
   });
 
   describe('appearance.theme migration', () => {

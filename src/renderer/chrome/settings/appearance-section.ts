@@ -58,12 +58,34 @@ export function createAppearanceSection(initial: Settings): HTMLElement {
     },
   });
 
+  // Sidebar pane-status dot colours — defaults mirror the (vibrant) built-ins in base.css.
+  const STATUS_DEFAULTS = { working: '#3fb950', claudeWorking: '#d97757', attention: '#d29922', exited: '#f85149' } as const;
+  type StatusKey = keyof typeof STATUS_DEFAULTS;
+  const statusRow = (key: StatusKey, label: string, hint: string): HTMLElement =>
+    row(
+      label,
+      colorControl({
+        value: local.appearance.statusColors[key],
+        fallback: STATUS_DEFAULTS[key],
+        onChange: (v) => {
+          local.appearance.statusColors[key] = v;
+          save();
+        },
+      }),
+      hint,
+    );
+
   el.append(
     sectionHeading('Theme'),
     row('Sync with OS', followToggle, 'Match the system, switching between Dark and Light.'),
     row('Theme', themeSelect, 'OLED Black (true black) is manual-only — turn off OS sync to pick it.'),
     sectionHeading('Panes'),
     row('Focused pane border', focusColor, 'Colour of the outline around the active terminal. Default follows the theme accent.'),
+    sectionHeading('Status colours'),
+    statusRow('working', 'Active', 'A terminal producing output.'),
+    statusRow('claudeWorking', 'Claude working', 'Claude Code is processing a turn.'),
+    statusRow('attention', 'Needs input', 'A pane that rang the bell and went quiet.'),
+    statusRow('exited', 'Exited', 'The process has ended.'),
     sectionHeading('Motion'),
     row('Reduce motion', motionToggle, 'Disable split/close/drawer animations and transitions.'),
   );

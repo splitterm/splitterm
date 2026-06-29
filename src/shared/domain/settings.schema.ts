@@ -18,6 +18,13 @@ export interface Settings {
     reduceMotion: boolean;
     /** border colour of the focused pane as a #hex; '' = use the theme accent (default) */
     focusBorderColor: string;
+    /** sidebar pane-status dot colours as #hex; '' = use the (vibrant) built-in default for that state */
+    statusColors: {
+      working: string;
+      claudeWorking: string;
+      attention: string;
+      exited: string;
+    };
   };
   font: {
     family: string;
@@ -64,7 +71,13 @@ export interface Settings {
 
 export const DEFAULTS: Settings = {
   schemaVersion: 1,
-  appearance: { theme: 'Dark', followOS: true, reduceMotion: false, focusBorderColor: '' },
+  appearance: {
+    theme: 'Dark',
+    followOS: true,
+    reduceMotion: false,
+    focusBorderColor: '',
+    statusColors: { working: '', claudeWorking: '', attention: '', exited: '' },
+  },
   font: { family: 'Cascadia Code, Consolas, ui-monospace, monospace', size: 13 },
   terminal: {
     scrollback: 1000,
@@ -192,6 +205,12 @@ export function normalize(input: unknown): Settings {
       followOS: bool(appearance.followOS, DEFAULTS.appearance.followOS),
       reduceMotion: bool(appearance.reduceMotion, DEFAULTS.appearance.reduceMotion),
       focusBorderColor: hexColor(appearance.focusBorderColor),
+      statusColors: ((sc) => ({
+        working: hexColor(sc.working),
+        claudeWorking: hexColor(sc.claudeWorking),
+        attention: hexColor(sc.attention),
+        exited: hexColor(sc.exited),
+      }))(isObj(appearance.statusColors) ? appearance.statusColors : {}),
     },
     font: {
       family: str(font.family, DEFAULTS.font.family),

@@ -252,35 +252,34 @@ html[data-reduce-motion='true'] {
   border-radius: 9999px;
   background: var(--text-disabled);
 }
+/* Vibrant, high-visibility status colours; each is a CSS var the user can override (Settings →
+   Appearance → Status colours), falling back to the built-in default here. */
 .pane-status-dot[data-status='working'] {
-  background: var(--accent);
+  background: var(--status-working, #3fb950); /* green — generic activity (was a hard-to-see blue) */
   animation: pane-status-pulse 1.2s var(--ease-out) infinite;
 }
 /* Claude Code is actively working — Claude's coral, prominent: pulsing dot, coloured label, and a row
    accent/wash so a working Claude is obvious at a glance (distinct from generic activity above). */
 .pane-status-dot[data-status='claudeWorking'] {
-  background: #d97757;
+  background: var(--status-claude, #d97757);
   animation: pane-status-pulse 1.2s var(--ease-out) infinite;
 }
 .pane-status-text[data-status='claudeWorking'] {
-  color: #d97757;
+  color: var(--status-claude, #d97757);
   font-weight: 600;
 }
 .row-claude-working {
-  box-shadow: inset 2px 0 0 #d97757;
-  background: color-mix(in srgb, #d97757 13%, transparent) !important;
+  box-shadow: inset 2px 0 0 var(--status-claude, #d97757);
+  background: color-mix(in srgb, var(--status-claude, #d97757) 13%, transparent) !important;
 }
-.pane-status-dot[data-status='attention'],
-.pane-status-text[data-status='attention'] {
-  color: #e0a83b;
-  background: #e0a83b;
+.pane-status-dot[data-status='attention'] {
+  background: var(--status-attention, #d29922); /* amber */
 }
 .pane-status-text[data-status='attention'] {
-  background: none;
+  color: var(--status-attention, #d29922);
 }
 .pane-status-dot[data-status='exited'] {
-  background: var(--danger);
-  opacity: 0.65;
+  background: var(--status-exited, #f85149); /* red */
 }
 @keyframes pane-status-pulse {
   0%,
