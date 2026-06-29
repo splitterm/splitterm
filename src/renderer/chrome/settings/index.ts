@@ -13,11 +13,11 @@ import { createGeneralSection } from './general-section';
 
 type CategoryId = 'appearance' | 'terminal' | 'profiles' | 'keyboard' | 'general';
 const CATEGORIES: { id: CategoryId; label: string; glyph: IconNode }[] = [
+  { id: 'general', label: 'General', glyph: SlidersHorizontal },
   { id: 'appearance', label: 'Appearance', glyph: Palette },
   { id: 'terminal', label: 'Terminal', glyph: SquareTerminal },
   { id: 'profiles', label: 'Profiles', glyph: Boxes },
   { id: 'keyboard', label: 'Keyboard', glyph: Keyboard },
-  { id: 'general', label: 'General', glyph: SlidersHorizontal },
 ];
 
 export interface SettingsModal {
@@ -29,7 +29,7 @@ export interface SettingsModal {
 }
 
 export function createSettingsModal(): SettingsModal {
-  let active: CategoryId = 'appearance';
+  let active: CategoryId = 'general';
   let opened = false;
 
   const overlay = document.createElement('div');

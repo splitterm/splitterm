@@ -1,7 +1,7 @@
 // Profiles settings: pick which shell/profile the "+" button opens by default, and create launchers
 // (a base shell + optional startup command + name) that show up in the new-terminal ▾ menu, spawn
 // with that name as the title, and run the command on launch.
-import { Trash2 } from 'lucide';
+import { Trash2, Pencil } from 'lucide';
 import { icon } from '../icons';
 import { ipc } from '@platform/ipc-client';
 import type { Settings } from '@shared/domain/settings.schema';
@@ -18,6 +18,7 @@ function linesToCommands(text: string): string[] | undefined {
 export function createProfilesSection(initial: Settings, shells: ShellProfile[]): HTMLElement {
   let profiles = structuredClone(initial.profiles);
   let currentDefault = initial.defaultProfileId; // which profile the "+" opens ('' = OS shell)
+  let editingId: string | null = null; // the profile being edited (the form saves it), or null = add new
 
   const el = document.createElement('div');
   el.className = 'flex flex-col gap-2';
@@ -82,7 +83,40 @@ export function createProfilesSection(initial: Settings, shells: ShellProfile[])
     'h-7 rounded-[var(--r-sm)] bg-[var(--accent)] text-[var(--accent-text)] text-[12px] font-medium ' +
     'cursor-pointer hover:bg-[var(--accent-hover)] transition-colors ease-[var(--ease-out)] duration-[var(--motion-fast)]';
   addBtn.textContent = 'Add profile';
-  form.append(nameInput, shellSelect, startupArea, restoreArea, addBtn);
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.hidden = true;
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.className =
+    'h-7 px-3 rounded-[var(--r-sm)] border border-[var(--border)] text-[12px] cursor-pointer ' +
+    'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]';
+  cancelBtn.addEventListener('click', () => resetForm());
+  const buttons = document.createElement('div');
+  buttons.className = 'flex gap-2';
+  addBtn.classList.add('px-3');
+  buttons.append(addBtn, cancelBtn);
+  form.append(nameInput, shellSelect, startupArea, restoreArea, buttons);
+
+  // Switch the form between "add" and "edit a profile" modes.
+  function resetForm(): void {
+    editingId = null;
+    nameInput.value = '';
+    shellSelect.selectedIndex = 0;
+    startupArea.value = '';
+    restoreArea.value = '';
+    addBtn.textContent = 'Add profile';
+    cancelBtn.hidden = true;
+  }
+  function startEdit(p: UserProfile): void {
+    editingId = p.id;
+    nameInput.value = p.name;
+    shellSelect.value = p.baseShellId;
+    startupArea.value = (p.startupCommands ?? []).join('\n');
+    restoreArea.value = (p.restoreCommands ?? []).join('\n');
+    addBtn.textContent = 'Save changes';
+    cancelBtn.hidden = false;
+    nameInput.focus();
+  }
 
   function renderList(): void {
     if (profiles.length === 0) {
@@ -118,30 +152,38 @@ export function createProfilesSection(initial: Settings, shells: ShellProfile[])
       'opacity-0 group-hover:opacity-100 text-[var(--text-secondary)] hover:bg-[var(--bg-active)] hover:text-[var(--danger)]';
     del.appendChild(icon(Trash2, 13));
     del.addEventListener('click', () => void removeProfile(p.id));
-    rowEl.append(text, del);
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.title = 'Edit profile';
+    edit.className =
+      'shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-[var(--r-sm)] cursor-pointer ' +
+      'opacity-0 group-hover:opacity-100 text-[var(--text-secondary)] hover:bg-[var(--bg-active)] hover:text-[var(--text-primary)]';
+    edit.appendChild(icon(Pencil, 13));
+    edit.addEventListener('click', () => startEdit(p));
+    rowEl.append(text, edit, del);
     return rowEl;
   }
 
-  async function addProfile(): Promise<void> {
+  async function saveProfile(): Promise<void> {
     const name = nameInput.value.trim();
     const baseShellId = shellSelect.value;
     if (!name || !baseShellId) return;
-    const profile: UserProfile = { id: crypto.randomUUID(), name, baseShellId };
+    // Keep the id when editing so the "+" default + any saved session referencing it stay valid.
+    const profile: UserProfile = { id: editingId ?? crypto.randomUUID(), name, baseShellId };
     const startupCommands = linesToCommands(startupArea.value);
     if (startupCommands) profile.startupCommands = startupCommands;
     const restoreCommands = linesToCommands(restoreArea.value);
     if (restoreCommands) profile.restoreCommands = restoreCommands;
-    profiles = [...profiles, profile];
+    profiles = editingId ? profiles.map((p) => (p.id === editingId ? profile : p)) : [...profiles, profile];
     await ipc.settings.set({ profiles });
-    nameInput.value = '';
-    startupArea.value = '';
-    restoreArea.value = '';
+    resetForm();
     renderList();
-    renderDefault(); // the new profile is now selectable as the "+" default
+    renderDefault(); // the new/renamed profile is selectable as the "+" default
   }
 
   async function removeProfile(id: string): Promise<void> {
     profiles = profiles.filter((p) => p.id !== id);
+    if (id === editingId) resetForm(); // don't keep editing a profile that no longer exists
     const patch: Partial<Settings> = { profiles };
     // If this profile was the "+" default, clear the dangling reference in the same write (otherwise
     // defaultProfileId keeps pointing at a now-missing id and "+" silently falls back to the OS shell).
@@ -156,7 +198,7 @@ export function createProfilesSection(initial: Settings, shells: ShellProfile[])
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    void addProfile();
+    void saveProfile();
   });
 
   renderList();
