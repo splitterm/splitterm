@@ -23,6 +23,8 @@ export interface Settings {
     statusColors: Record<StatusState, string>;
     /** sidebar pane-status dot animation per state; '' = use the built-in default (working/claude pulse) */
     statusAnimations: Record<StatusState, StatusAnim | ''>;
+    /** sidebar status WORD per state; '' = use the built-in label (e.g. 'Working', 'Needs input') */
+    statusTexts: Record<StatusState, string>;
   };
   font: {
     family: string;
@@ -76,6 +78,7 @@ export const DEFAULTS: Settings = {
     focusBorderColor: '',
     statusColors: { working: '', claudeWorking: '', attention: '', exited: '' },
     statusAnimations: { working: '', claudeWorking: '', attention: '', exited: '' },
+    statusTexts: { working: '', claudeWorking: '', attention: '', exited: '' },
   },
   font: { family: 'Cascadia Code, Consolas, ui-monospace, monospace', size: 13 },
   terminal: {
@@ -151,6 +154,13 @@ const statusAnimRecord = (v: unknown): Record<StatusState, StatusAnim | ''> => {
   return Object.fromEntries(
     STATUS_STATES.map((s) => [s, o[s] === 'pulse' || o[s] === 'static' ? o[s] : '']),
   ) as Record<StatusState, StatusAnim | ''>;
+};
+const STATUS_TEXT_MAX = 24; // a short label — bound it so a crafted config can't bloat the sidebar / file
+const statusTextRecord = (v: unknown): Record<StatusState, string> => {
+  const o = isObj(v) ? v : {};
+  return Object.fromEntries(
+    STATUS_STATES.map((s) => [s, typeof o[s] === 'string' ? (o[s] as string).slice(0, STATUS_TEXT_MAX) : '']),
+  ) as Record<StatusState, string>;
 };
 // A profile's optional status override — only well-formed, non-default fields are kept; '' overall → undefined.
 function normalizeProfileStatus(v: unknown): ProfileStatus | undefined {
@@ -239,6 +249,7 @@ export function normalize(input: unknown): Settings {
       focusBorderColor: hexColor(appearance.focusBorderColor),
       statusColors: statusColorRecord(appearance.statusColors),
       statusAnimations: statusAnimRecord(appearance.statusAnimations),
+      statusTexts: statusTextRecord(appearance.statusTexts),
     },
     font: {
       family: str(font.family, DEFAULTS.font.family),

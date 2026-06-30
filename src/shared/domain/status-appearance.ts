@@ -23,6 +23,14 @@ export const DEFAULT_STATUS_ANIM: Record<StatusState, StatusAnim> = {
   attention: 'static',
   exited: 'static',
 };
+/** Default sidebar status WORD per state — the label shown next to the dot when the user hasn't set
+ *  a custom one (appearance.statusTexts). Kept terse; 'working' is intentionally not shown in the sidebar. */
+export const DEFAULT_STATUS_TEXT: Record<StatusState, string> = {
+  working: 'Active',
+  claudeWorking: 'Working',
+  attention: 'Needs input',
+  exited: 'Exited',
+};
 
 /** A profile's optional status override. Absent fields fall through to the global/built-in default. */
 export interface ProfileStatus {
