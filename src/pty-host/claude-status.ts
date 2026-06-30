@@ -20,7 +20,7 @@ import { processParents, findAncestorIn } from './process-tree';
 const SESSIONS_DIR = process.env.SPLITTERM_CLAUDE_SESSIONS_DIR || path.join(os.homedir(), '.claude', 'sessions');
 const POLL_MS = 2000; // safety-net cadence; fs.watch drives the low-latency path when it's available
 const WATCH_DEBOUNCE_MS = 300; // coalesce bursts (an active Claude rewrites its file rapidly) into one scan
-const TREE_COOLDOWN_MS = 4000; // min gap between process-tree snapshots — bounds CPU under heavy session churn
+const TREE_COOLDOWN_MS = 750; // min gap between process-tree snapshots — only bites if a shell-out persistently fails
 
 /** Claude's own `status` field → our pane signal. busy = working a turn; waiting = needs the user (e.g.
  *  a permission prompt); everything else (idle / shell / unknown) is "nothing urgent". */
@@ -125,10 +125,15 @@ export function startClaudeStatusWatcher(opts: ClaudeWatcherOptions): () => void
       if (unresolved.length && live.length && Date.now() - lastTreeFetch >= TREE_COOLDOWN_MS) {
         lastTreeFetch = Date.now();
         const parents = await processParents();
-        const shellPids = new Set(live.map((s) => s.pid));
-        for (const s of unresolved) {
-          const ancestor = findAncestorIn(s.pid, parents, shellPids);
-          cache.set(s.pid, ancestor !== undefined ? shellPidToId.get(ancestor)! : null);
+        // Only commit results from a SUCCESSFUL snapshot — a failed/empty shell-out must not poison the
+        // cache with false 'none's (which the sticky negative cache would then make permanent). On failure
+        // the PIDs stay unresolved and retry on the next scan.
+        if (parents.size > 0) {
+          const shellPids = new Set(live.map((s) => s.pid));
+          for (const s of unresolved) {
+            const ancestor = findAncestorIn(s.pid, parents, shellPids);
+            cache.set(s.pid, ancestor !== undefined ? shellPidToId.get(ancestor)! : null);
+          }
         }
       }
 
