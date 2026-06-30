@@ -84,6 +84,13 @@ try {
   writeStatus(shellPid, 'waiting');
   result.waitingLit = await waitStatus('attention');
 
+  // Needs-input is authoritative: clicking into / typing in the pane must NOT clear it (only the
+  // watcher does, once Claude moves on). Click + type a char and confirm it's still 'attention'.
+  await win.locator('.xterm-screen').first().click();
+  await win.keyboard.type('y');
+  await sleep(700);
+  result.attentionSurvivesInput = (await statusOf()) === 'attention';
+
   // idle (between turns) → idle
   writeStatus(shellPid, 'idle');
   result.idleCleared = await waitStatus('idle');
@@ -100,6 +107,7 @@ try {
     result.statusInitial !== 'claudeWorking' &&
     result.busyLit &&
     result.waitingLit &&
+    result.attentionSurvivesInput &&
     result.idleCleared &&
     result.reLit &&
     result.goneReverted;

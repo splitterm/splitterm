@@ -225,9 +225,13 @@ export async function createTerminal(
   );
   term.onData((d) => {
     // The user is engaging — clear any pending bell (even during the post-bell 'working' window, so a
-    // stale bell can't surface as a spurious 'attention' later) and drop an active 'attention'.
+    // stale bell can't surface as a spurious 'attention' later).
     belled = false;
-    if (status === 'attention') setStatus('idle');
+    // A Claude 'waiting' attention (needs-input) is authoritative until the watcher sees Claude move on
+    // AFTER you actually answer — so local input must NOT drop it. Crucially that includes the focus-
+    // report bytes xterm emits on click in/out (Claude enables focus tracking), which previously cleared
+    // it the moment you clicked into the pane. A bell-driven attention (no Claude session) still clears.
+    if (status === 'attention' && claudeSignal !== 'waiting') setStatus('idle');
     if (parsingOutput === 0) lastInputAt = performance.now(); // genuine keystroke (not a synthetic query reply)
     // Broadcast input: mirror genuine keystrokes to every pane's PTY. Excludes synthetic query replies
     // (which fire while parsing output, parsingOutput > 0) and, since those are a background pane's only
