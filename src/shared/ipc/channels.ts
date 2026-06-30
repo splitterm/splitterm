@@ -26,6 +26,11 @@ export const CONTROL_CHANNELS = {
   sessionSave: 'session:save',
 
   appVersion: 'app:version',
+  /** renderer → main: theme applied + first splash frame painted — main may now SHOW the window
+      (deferred from ready-to-show so the window never flashes the default-dark splash pre-theme) */
+  bootReady: 'app:boot-ready',
+  /** renderer → main: the boot splash finished — reveal the native window controls */
+  splashDone: 'app:splash-done',
 } as const;
 
 export type ControlChannel = (typeof CONTROL_CHANNELS)[keyof typeof CONTROL_CHANNELS];

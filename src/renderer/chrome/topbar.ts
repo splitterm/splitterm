@@ -13,8 +13,10 @@ export function createTopbar(opts: {
   onOpenSettings: () => void;
 }): HTMLElement {
   const bar = document.createElement('header');
-  bar.className =
-    'app-drag flex items-center gap-2 h-full px-2 bg-[var(--bg-app)] border-b border-[var(--border)]';
+  // No border-b here: the native window-controls overlay (top-right) would cover it, so the separator
+  // line stops at the buttons. The line lives on the body's top edge instead (base.css .body), which
+  // sits just below the overlay — so it runs the full width, under the controls too.
+  bar.className = 'app-drag flex items-center gap-2 h-full px-2 bg-[var(--bg-app)]';
 
   const toggle = document.createElement('button');
   toggle.type = 'button';

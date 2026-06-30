@@ -1,0 +1,85 @@
+/* Startup splash overlay — the one-shot "boot" animation that plays on launch and then dissolves
+ * into the app. Deliberately self-contained (no design tokens, no Tailwind) so it renders correctly
+ * on the very first frame, before the app's stylesheets are even parsed.
+ * The choreography lives in splash.ts (Web Animations API); this file is structure only.
+ * Mark geometry mirrors assets/splitterm-logos/mono.svg.
+ *
+ * Colours track the active theme via <html data-theme> (set before first paint from the boot
+ * snapshot — see app/main.ts). Default = Dark; OLED = true black; Light = ink-on-white. */
+
+#splash {
+  /* Dark theme (default :root) */
+  --splash-bg: #1e1f22;
+  --splash-ink: #ffffff;
+
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647; /* above every app layer, including the settings/palette overlays */
+  background: var(--splash-bg);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  cursor: default;
+  will-change: opacity;
+}
+html[data-theme='oled'] #splash {
+  --splash-bg: #000000;
+}
+html[data-theme='light'] #splash {
+  --splash-bg: #ffffff;
+  --splash-ink: #000000;
+}
+
+.splash-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  will-change: transform, opacity;
+}
+
+.splash-mark {
+  width: 104px;
+  height: 104px;
+  overflow: visible;
+  flex: none;
+}
+.splash-mark .pane {
+  fill: none;
+  stroke: var(--splash-ink);
+  stroke-width: 10;
+  stroke-linejoin: round;
+}
+/* pathLength="100" normalises every outline so dash maths is 0..100 regardless of perimeter. */
+.splash-mark .pane-draw {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+}
+.splash-mark .fill {
+  fill: var(--splash-ink);
+  clip-path: inset(0 0 100% 0); /* hidden until it "lights up" by wiping down */
+}
+.splash-mark .cursor {
+  fill: var(--splash-ink);
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+}
+
+.splash-word {
+  display: flex;
+  align-items: baseline;
+  font-family: 'Inter', system-ui, 'Segoe UI', sans-serif;
+  font-weight: 600;
+  font-size: 46px;
+  letter-spacing: -1.1px; /* matches the canonical lockup's -2 @ 84px proportionally */
+  line-height: 1;
+  color: var(--splash-ink);
+}
+.splash-word .ch {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.42em);
+  will-change: transform, opacity;
+}

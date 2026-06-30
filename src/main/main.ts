@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, ipcMain, Menu, session, type WebContents } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, Menu, nativeTheme, session, type IpcMainEvent, type WebContents } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import started from 'electron-squirrel-startup';
@@ -15,6 +15,69 @@ if (started) {
 }
 
 const isMac = process.platform === 'darwin';
+
+// MUST equal tokens.css --titlebar-h. The overlay covers rows [0, TITLEBAR_H); the renderer paints the
+// topbar/body separator at exactly that y (.body border-top, base.css). If this grows past --titlebar-h
+// the overlay re-covers the separator under the caption buttons (the bug we just fixed).
+const TITLEBAR_H = 36;
+
+// Chrome colours per resolved theme, mirroring tokens.css (--bg-app + --text-secondary). The native
+// caption buttons then match the topbar EXACTLY: the overlay bg blends into bg-app, and the min/max/
+// close glyphs are the same colour as the topbar's own icons — not a brighter default that stands out.
+// OLED is manual-only; followOS flips between Dark and Light against the OS scheme.
+const THEME_CHROME = {
+  dark: { bg: '#1E1F22', symbol: '#9DA0A8' },
+  oled: { bg: '#000000', symbol: '#8B8D94' },
+  light: { bg: '#FFFFFF', symbol: '#6C707E' },
+} as const;
+type Chrome = (typeof THEME_CHROME)[keyof typeof THEME_CHROME];
+const resolveChrome = (a: Settings['appearance']): Chrome => {
+  if (a.followOS) return nativeTheme.shouldUseDarkColors ? THEME_CHROME.dark : THEME_CHROME.light;
+  if (a.theme === 'OLED Black') return THEME_CHROME.oled;
+  if (a.theme === 'Light') return THEME_CHROME.light;
+  return THEME_CHROME.dark;
+};
+// `hidden` (boot): symbolColor === bg so the controls vanish into the splash; revealed, the glyphs
+// take the theme's icon colour so they read as part of the topbar.
+const overlayFor = (c: Chrome, hidden = false): { color: string; symbolColor: string; height: number } => ({
+  color: c.bg,
+  symbolColor: hidden ? c.bg : c.symbol,
+  height: TITLEBAR_H,
+});
+
+// Windows whose caption controls have been revealed (post-splash). Gates the live re-theme below so a
+// settings change DURING boot can't reveal the controls early over the splash.
+const revealed = new WeakSet<BrowserWindow>();
+// Reveal the native window controls hidden during the boot splash, matched to the current theme.
+// Idempotent: both the renderer's splash-done signal and a failsafe timer call it, whichever lands first.
+const revealWindowChrome = (win: BrowserWindow): void => {
+  if (win.isDestroyed()) return;
+  revealed.add(win);
+  if (isMac) win.setWindowButtonVisibility(true);
+  else win.setTitleBarOverlay(overlayFor(resolveChrome(getSettings().appearance)));
+};
+// Re-theme the window chrome when the theme changes (a settings edit, or with followOS the OS scheme)
+// so it keeps matching the topbar instead of standing out in the previous theme's colours. Repaints
+// BOTH the resize-gutter backgroundColor (all platforms) and the native caption-button overlay (Win/
+// Linux only — macOS traffic lights adapt on their own).
+const reThemeChrome = (): void => {
+  const c = resolveChrome(getSettings().appearance);
+  const overlay = overlayFor(c);
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed() || !revealed.has(win)) continue;
+    win.setBackgroundColor(c.bg); // else a post-switch resize-grow flashes the old theme in the gutter
+    if (!isMac) win.setTitleBarOverlay(overlay);
+  }
+};
+
+// The minimal appearance snapshot the renderer needs to theme the splash + first paint before its
+// own settings IPC resolves. The renderer resolves theme/followOS against the OS colour scheme.
+const bootArg = (appearance: Settings['appearance']): string =>
+  `--splitterm-boot=${JSON.stringify({
+    theme: appearance.theme,
+    followOS: appearance.followOS,
+    reduceMotion: appearance.reduceMotion,
+  })}`;
 
 // Content-Security-Policy delivered as a response header — stronger than the <meta> fallback in
 // index.html (it covers every response and can set header-only directives like frame-ancestors).
@@ -59,18 +122,24 @@ const lockNavigation = (contents: WebContents): void => {
 };
 
 const createWindow = (): void => {
+  // The window is born hidden in the resolved theme's chrome colour, so when it finally shows it is
+  // already the user's theme — never the default-dark splash.
+  const chrome = resolveChrome(getSettings().appearance);
   const win = new BrowserWindow({
     width: 1024,
     height: 680,
     minWidth: 480,
     minHeight: 320,
-    backgroundColor: '#1E1F22', // no white flash before first paint
+    // Governs pre-paint / resize-gutter fills (the window is hidden until the renderer themes + paints,
+    // so this is never seen as a flash) — match the resolved theme so any gutter fill blends in.
+    backgroundColor: chrome.bg,
     show: false,
     titleBarStyle: 'hidden',
-    // Native min/max/close on Windows/Linux; macOS shows traffic lights with 'hidden'.
+    // Native min/max/close on Windows/Linux; macOS shows traffic lights with 'hidden'. Both start
+    // hidden into the splash (overlay symbol === bg) and are revealed, theme-matched, when it ends.
     ...(isMac
       ? { trafficLightPosition: { x: 12, y: 11 } }
-      : { titleBarOverlay: { color: '#1E1F22', symbolColor: '#CED0D6', height: 36 } }),
+      : { titleBarOverlay: overlayFor(chrome, true) }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -78,10 +147,42 @@ const createWindow = (): void => {
       nodeIntegration: false,
       backgroundThrottling: false, // keep terminals rendering when unfocused
       v8CacheOptions: 'code', // cache compiled JS for a faster cold start (pin the default explicitly)
+      // Hand the renderer a themed appearance snapshot synchronously, so the boot splash and first
+      // paint match the user's theme before settings arrive over async IPC (preload reads this).
+      additionalArguments: [bootArg(getSettings().appearance)],
     },
   });
 
-  win.once('ready-to-show', () => win.show());
+  // macOS has no titleBarOverlay to recolour, so hide the traffic lights outright during boot.
+  if (isMac) win.setWindowButtonVisibility(false);
+
+  // Show the window only once the renderer has applied the theme and painted its first (themed) splash
+  // frame — signalled by app:boot-ready. Deferring from ready-to-show is what removes the brief
+  // default-dark screen before the real theme resolves. Failsafe: show anyway after 4s if the renderer
+  // never signals (e.g. a bundle error), so a broken boot can't trap the user behind a hidden window.
+  let shown = false;
+  const showOnce = (): void => {
+    if (shown || win.isDestroyed()) return;
+    shown = true;
+    win.show();
+  };
+  const onBootReady = (e: IpcMainEvent): void => {
+    if (e.sender === win.webContents) showOnce();
+  };
+  ipcMain.on(CONTROL_CHANNELS.bootReady, onBootReady);
+  const showFailsafe = setTimeout(showOnce, 4000);
+  let revealFailsafe: ReturnType<typeof setTimeout> | undefined;
+  win.on('closed', () => {
+    ipcMain.removeListener(CONTROL_CHANNELS.bootReady, onBootReady);
+    clearTimeout(showFailsafe);
+    if (revealFailsafe) clearTimeout(revealFailsafe);
+  });
+
+  win.once('ready-to-show', () => {
+    // Failsafe: if the renderer never signals splash completion (e.g. a bundle error), don't leave
+    // the window controls hidden in the splash canvas forever.
+    revealFailsafe = setTimeout(() => revealWindowChrome(win), 6000);
+  });
 
   lockNavigation(win.webContents);
 
@@ -100,6 +201,10 @@ const createWindow = (): void => {
 };
 
 ipcMain.handle(CONTROL_CHANNELS.appVersion, () => app.getVersion());
+ipcMain.on(CONTROL_CHANNELS.splashDone, (e) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (win) revealWindowChrome(win);
+});
 ipcMain.handle(CONTROL_CHANNELS.clipboardRead, () => clipboard.readText());
 ipcMain.handle(CONTROL_CHANNELS.clipboardWrite, (_e, text: unknown) => {
   // The renderer is the only caller, but it sits across the trust boundary — coerce to a string.
@@ -117,13 +222,17 @@ ipcMain.handle(CONTROL_CHANNELS.settingsSet, (_e, patch: Partial<Settings>) => {
   setSettings(patch);
 });
 
-// On any settings change: push user profiles + default to the pty-host and broadcast to all renderers.
+// On any settings change: push user profiles + default to the pty-host, broadcast to all renderers, and
+// re-theme the native caption buttons so a theme switch keeps them matching the topbar.
 onSettingsChange((settings) => {
   syncUserProfiles(settings.profiles, settings.defaultProfileId);
   for (const w of BrowserWindow.getAllWindows()) {
     w.webContents.send(CONTROL_CHANNELS.settingsChanged, settings);
   }
+  reThemeChrome();
 });
+// followOS: when the OS colour scheme flips, the resolved theme changes too — repaint the overlay.
+nativeTheme.on('updated', reThemeChrome);
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null); // frameless terminal: no menu bar, and drop default accelerators (Ctrl+W…)

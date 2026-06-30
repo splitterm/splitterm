@@ -47,6 +47,10 @@ body {
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   background: var(--bg-app);
+  /* The topbar/body separator lives here (not as the topbar's border-b) so it runs the FULL width:
+     it sits at the very top of the body, just below the native title-bar overlay, which therefore
+     can't cover it on the right the way it covered a topbar border-b under the window controls. */
+  border-top: 1px solid var(--border);
   transition: grid-template-columns var(--motion-base) var(--ease-out);
 }
 .body.sidebar-open {

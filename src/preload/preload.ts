@@ -1,9 +1,30 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { CONTROL_CHANNELS, type SplittermApi } from '@shared/ipc';
 
+// Main appends `--splitterm-boot=<json>` to the renderer's argv (webPreferences.additionalArguments)
+// so we can hand the page a themed appearance snapshot synchronously, before settings load over IPC.
+// Parsed defensively — main is the only producer, but a malformed/absent arg must never break boot.
+const BOOT_PREFIX = '--splitterm-boot=';
+function readBoot(): SplittermApi['boot'] {
+  const fallback: SplittermApi['boot'] = { theme: 'Dark', followOS: true, reduceMotion: false };
+  try {
+    const arg = process.argv.find((a) => a.startsWith(BOOT_PREFIX));
+    if (!arg) return fallback;
+    const p = JSON.parse(arg.slice(BOOT_PREFIX.length)) as Partial<SplittermApi['boot']>;
+    return {
+      theme: typeof p.theme === 'string' ? p.theme : fallback.theme,
+      followOS: typeof p.followOS === 'boolean' ? p.followOS : fallback.followOS,
+      reduceMotion: typeof p.reduceMotion === 'boolean' ? p.reduceMotion : fallback.reduceMotion,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 // One frozen, narrow API on window.splitterm — typed by the shared contract.
 // (The PTY byte firehose MessagePort is bridged via window.postMessage in M1, not here.)
 const api: SplittermApi = {
+  boot: readBoot(),
   pty: {
     spawn: (req) => ipcRenderer.invoke(CONTROL_CHANNELS.ptySpawn, req),
     kill: (req) => ipcRenderer.invoke(CONTROL_CHANNELS.ptyKill, req),
@@ -34,6 +55,8 @@ const api: SplittermApi = {
   },
   app: {
     version: () => ipcRenderer.invoke(CONTROL_CHANNELS.appVersion),
+    bootReady: () => ipcRenderer.send(CONTROL_CHANNELS.bootReady),
+    splashDone: () => ipcRenderer.send(CONTROL_CHANNELS.splashDone),
   },
 };
 

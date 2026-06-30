@@ -8,9 +8,40 @@
       content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
     />
     <title>splitterm</title>
+    <style>
+      /* Paint the boot canvas on the very first frame — before any bundle CSS — so launch shows a
+         themed, opaque backdrop with no flash of unstyled chrome. splitterm's splash.ts fills and
+         animates this, then removes it. The default is the Dark theme's bg; app/main.ts sets
+         <html data-theme> from the boot snapshot before paint, flipping these for OLED/Light.
+         The failsafe keeps a JS failure from trapping the user behind a blank screen. */
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        background: #1e1f22;
+        /* 6s matches the main-process chrome-reveal failsafe, so in a JS-dead boot the overlay
+           lifts exactly as the native window controls reappear (no chrome floating over it). */
+        animation: splash-failsafe 0s linear 6s forwards;
+      }
+      html[data-theme='oled'] #splash {
+        background: #000;
+      }
+      html[data-theme='light'] #splash {
+        background: #fff;
+      }
+      @keyframes splash-failsafe {
+        to {
+          opacity: 0;
+          visibility: hidden;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="splash"></div>
+    <!-- Boot splash first (tiny graph) so the animation starts on the first frame, then the app. -->
+    <script type="module" src="/src/renderer/splash/boot.ts"></script>
     <script type="module" src="/src/renderer/app/main.ts"></script>
   </body>
 </html>
