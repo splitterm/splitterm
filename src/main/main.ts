@@ -16,10 +16,14 @@ if (started) {
 
 const isMac = process.platform === 'darwin';
 
-// MUST equal tokens.css --titlebar-h. The overlay covers rows [0, TITLEBAR_H); the renderer paints the
-// topbar/body separator at exactly that y (.body border-top, base.css). If this grows past --titlebar-h
-// the overlay re-covers the separator under the caption buttons (the bug we just fixed).
+// MUST equal tokens.css --titlebar-h — the topbar height; the renderer paints the topbar/body separator
+// at exactly this y (.body border-top, base.css).
 const TITLEBAR_H = 36;
+// The native caption-button overlay is painted 2px SHORTER than the topbar. Its background fill spans
+// [0, OVERLAY_H) on the right; making that end above the separator (at y = TITLEBAR_H) is what lets the
+// hairline run the FULL width — UNDER the buttons too — instead of being clipped at the controls. (The
+// buttons just sit a hair higher in the bar; the gap below them is bg-app, so it's invisible.)
+const OVERLAY_H = TITLEBAR_H - 2;
 
 // Chrome colours per resolved theme, mirroring tokens.css (--bg-app + --text-secondary). The native
 // caption buttons then match the topbar EXACTLY: the overlay bg blends into bg-app, and the min/max/
@@ -42,7 +46,7 @@ const resolveChrome = (a: Settings['appearance']): Chrome => {
 const overlayFor = (c: Chrome, hidden = false): { color: string; symbolColor: string; height: number } => ({
   color: c.bg,
   symbolColor: hidden ? c.bg : c.symbol,
-  height: TITLEBAR_H,
+  height: OVERLAY_H, // 2px short of the topbar so the body separator clears the caption buttons (full-width line)
 });
 
 // Windows whose caption controls have been revealed (post-splash). Gates the live re-theme below so a

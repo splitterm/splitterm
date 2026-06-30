@@ -65,9 +65,9 @@
   --mono-font: 'Cascadia Code', 'Consolas', ui-monospace, monospace;
   --mono-size: 13px;
 
-  /* Chrome dimensions. --titlebar-h MUST equal TITLEBAR_H in src/main/main.ts: the body's full-width
-     separator (.body border-top) sits at this y, just below the native title-bar overlay of the same
-     height — if they diverge, the overlay re-covers the separator under the window controls. */
+  /* Chrome dimensions. --titlebar-h MUST equal TITLEBAR_H in src/main/main.ts (the topbar height); the
+     body's full-width separator (.body border-top) sits at this y. The native caption-button overlay is
+     painted 2px SHORTER (OVERLAY_H in main.ts) so its background can't clip the separator on the right. */
   --titlebar-h: 36px;
   --statusbar-h: 24px;
 
