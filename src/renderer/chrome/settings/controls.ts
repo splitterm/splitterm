@@ -111,23 +111,43 @@ export function textControl(opts: {
 }
 
 /**
- * A colour swatch (#hex) with a "Default" reset. `value` of '' means "use the theme default", in which
- * case the swatch previews `fallback`; onChange fires '' on reset, else the picked #rrggbb.
+ * A colour swatch (#hex) with a reset. Default mode: `value` of '' means "use the theme default" and the
+ * swatch previews `fallback`. `none` mode: '' means OFF (no colour) — the swatch shows a diagonal slash
+ * and the reset button reads `noneLabel` (e.g. "Off"); clicking the swatch starts the picker at `fallback`.
+ * onChange fires '' on reset, else the picked #rrggbb.
  */
-export function colorControl(opts: { value: string; fallback: string; onChange: (value: string) => void }): HTMLElement {
+export function colorControl(opts: {
+  value: string;
+  fallback: string;
+  onChange: (value: string) => void;
+  none?: boolean;
+  noneLabel?: string;
+}): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'flex items-center gap-2';
-  let current = opts.value || opts.fallback; // the live #hex shown in the swatch
+  let value = opts.value; // the stored value: '' (default / off) or a #hex
+  let current = opts.value || opts.fallback; // the #hex the picker opens at / the swatch shows when set
 
   const swatch = document.createElement('button');
   swatch.type = 'button';
   swatch.setAttribute('aria-label', 'Pick a colour');
   swatch.className = 'h-7 w-9 rounded-[var(--r-sm)] border border-[var(--border)] cursor-pointer';
-  swatch.style.background = current;
+  // 'none' mode with no colour set: a diagonal slash on the input bg reads as "off / no background".
+  const paintSwatch = (): void => {
+    if (opts.none && !value) {
+      swatch.style.background = 'var(--bg-input)';
+      swatch.style.backgroundImage =
+        'linear-gradient(to top right, transparent calc(50% - 0.6px), var(--text-disabled) calc(50% - 0.6px), var(--text-disabled) calc(50% + 0.6px), transparent calc(50% + 0.6px))';
+    } else {
+      swatch.style.backgroundImage = '';
+      swatch.style.background = current;
+    }
+  };
+  paintSwatch();
 
   const reset = document.createElement('button');
   reset.type = 'button';
-  reset.textContent = 'Default';
+  reset.textContent = opts.noneLabel ?? 'Default';
   reset.className =
     'h-7 px-2 rounded-[var(--r-sm)] border border-[var(--border)] text-[11px] cursor-pointer ' +
     'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]';
@@ -154,8 +174,9 @@ export function colorControl(opts: { value: string; fallback: string; onChange: 
       return;
     }
     const picker = createColorPicker(current, (hex) => {
+      value = hex;
       current = hex;
-      swatch.style.background = hex;
+      paintSwatch();
       opts.onChange(hex);
     });
     pop = document.createElement('div');
@@ -178,8 +199,9 @@ export function colorControl(opts: { value: string; fallback: string; onChange: 
   });
 
   reset.addEventListener('click', () => {
+    value = '';
     current = opts.fallback;
-    swatch.style.background = current;
+    paintSwatch();
     opts.onChange('');
     closePop();
   });

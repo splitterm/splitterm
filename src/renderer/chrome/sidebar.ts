@@ -138,8 +138,8 @@ export function createSidebar(
       if (profileStatus?.enabled === false) {
         dot.style.display = 'none'; // this profile turns status off entirely (every state, incl. idle)
         statusText.textContent = '';
-        rowEl.classList.remove('row-claude-working');
-        rowEl.style.removeProperty('--row-claude');
+        rowEl.classList.remove('row-bg');
+        rowEl.style.removeProperty('--row-bg');
         rowEl.setAttribute('aria-label', `Focus ${label}`);
         return;
       }
@@ -158,9 +158,11 @@ export function createSidebar(
       // the calm dim label — its red dot already signals the exit without an alarming red word.
       const coloured = p.status === 'claudeWorking' || p.status === 'attention';
       statusText.style.color = resolved && coloured ? resolved.color : '';
-      rowEl.classList.toggle('row-claude-working', p.status === 'claudeWorking'); // subtle Claude row tint (no bar)
-      if (p.status === 'claudeWorking' && resolved) rowEl.style.setProperty('--row-claude', resolved.color);
-      else rowEl.style.removeProperty('--row-claude');
+      // Per-state row background tint (Appearance → Status → Row background); '' = no tint for that state.
+      const rowBg = state ? s.appearance.statusRowColors[state] : '';
+      rowEl.classList.toggle('row-bg', !!rowBg);
+      if (rowBg) rowEl.style.setProperty('--row-bg', rowBg);
+      else rowEl.style.removeProperty('--row-bg');
       rowEl.setAttribute('aria-label', `Focus ${label} — ${statusLabel}`);
     };
     return { el: rowEl, update };

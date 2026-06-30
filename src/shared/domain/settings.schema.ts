@@ -25,6 +25,8 @@ export interface Settings {
     statusAnimations: Record<StatusState, StatusAnim | ''>;
     /** sidebar status WORD per state; '' = use the built-in label (e.g. 'Working', 'Needs input') */
     statusTexts: Record<StatusState, string>;
+    /** sidebar ROW background tint per state as #hex; '' = no row background for that state */
+    statusRowColors: Record<StatusState, string>;
   };
   font: {
     family: string;
@@ -79,6 +81,8 @@ export const DEFAULTS: Settings = {
     statusColors: { working: '', claudeWorking: '', attention: '', exited: '' },
     statusAnimations: { working: '', claudeWorking: '', attention: '', exited: '' },
     statusTexts: { working: '', claudeWorking: '', attention: '', exited: '' },
+    // Only Claude-working is tinted by default (the subtle orange row wash); other states have no row bg.
+    statusRowColors: { working: '', claudeWorking: '#d97757', attention: '', exited: '' },
   },
   font: { family: 'Cascadia Code, Consolas, ui-monospace, monospace', size: 13 },
   terminal: {
@@ -154,6 +158,13 @@ const statusAnimRecord = (v: unknown): Record<StatusState, StatusAnim | ''> => {
   return Object.fromEntries(
     STATUS_STATES.map((s) => [s, o[s] === 'pulse' || o[s] === 'static' ? o[s] : '']),
   ) as Record<StatusState, StatusAnim | ''>;
+};
+// Row-background tint per state. Unlike statusColors (all default ''), this has a non-empty default
+// (Claude-working tinted), so an ABSENT field falls back to DEFAULTS; a PRESENT object is taken as the
+// source of truth (a missing/'' member there = off), so the user can switch Claude-working off.
+const statusRowColorRecord = (v: unknown): Record<StatusState, string> => {
+  if (!isObj(v)) return { ...DEFAULTS.appearance.statusRowColors };
+  return Object.fromEntries(STATUS_STATES.map((s) => [s, hexColor(v[s])])) as Record<StatusState, string>;
 };
 const STATUS_TEXT_MAX = 24; // a short label — bound it so a crafted config can't bloat the sidebar / file
 const statusTextRecord = (v: unknown): Record<StatusState, string> => {
@@ -250,6 +261,7 @@ export function normalize(input: unknown): Settings {
       statusColors: statusColorRecord(appearance.statusColors),
       statusAnimations: statusAnimRecord(appearance.statusAnimations),
       statusTexts: statusTextRecord(appearance.statusTexts),
+      statusRowColors: statusRowColorRecord(appearance.statusRowColors),
     },
     font: {
       family: str(font.family, DEFAULTS.font.family),

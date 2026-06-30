@@ -59,9 +59,10 @@ export function createAppearanceSection(initial: Settings): HTMLElement {
     },
   });
 
-  // Sidebar pane-status dots — the GLOBAL default colour + animation + label per state. Profiles can
-  // override colour/animation per-profile (Settings → Profiles). Each row is colour (swatch + Default) +
-  // animation (Default/Pulse/Static) + a custom label (blank = the built-in word).
+  // Sidebar pane-status — the GLOBAL default per state: dot colour + animation + custom label + an
+  // optional row background tint. Profiles can override colour/animation per-profile (Settings →
+  // Profiles). Each row is: dot colour (swatch + Default) · animation · label (blank = built-in word) ·
+  // row background (swatch + Off; Off = no tint — only Claude-working is tinted by default).
   const statusRow = (key: StatusState, hint: string): HTMLElement => {
     const ctl = document.createElement('div');
     ctl.className = 'flex items-center gap-2';
@@ -76,20 +77,37 @@ export function createAppearanceSection(initial: Settings): HTMLElement {
     text.classList.remove('min-w-[240px]');
     text.classList.add('w-24');
     text.setAttribute('aria-label', `${STATUS_LABELS[key]} label`);
+
+    const dotColor = colorControl({
+      value: local.appearance.statusColors[key],
+      fallback: DEFAULT_STATUS_COLORS[key],
+      onChange: (v) => {
+        local.appearance.statusColors[key] = v;
+        save();
+      },
+    });
+    dotColor.title = `${STATUS_LABELS[key]} dot colour`;
+
+    const rowColor = colorControl({
+      value: local.appearance.statusRowColors[key],
+      fallback: DEFAULT_STATUS_COLORS[key],
+      none: true,
+      noneLabel: 'Off',
+      onChange: (v) => {
+        local.appearance.statusRowColors[key] = v;
+        save();
+      },
+    });
+    rowColor.title = `${STATUS_LABELS[key]} row background (Off = none)`;
+
     ctl.append(
-      colorControl({
-        value: local.appearance.statusColors[key],
-        fallback: DEFAULT_STATUS_COLORS[key],
-        onChange: (v) => {
-          local.appearance.statusColors[key] = v;
-          save();
-        },
-      }),
+      dotColor,
       animSelect(local.appearance.statusAnimations[key], (v) => {
         local.appearance.statusAnimations[key] = v;
         save();
       }),
       text,
+      rowColor,
     );
     return row(STATUS_LABELS[key], ctl, hint);
   };

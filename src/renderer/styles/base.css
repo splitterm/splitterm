@@ -363,9 +363,10 @@ html[data-reduce-motion='true'] {
 .pane-status-text[data-status='attention'] {
   color: #d29922;
 }
-/* Claude Code working — a subtle row tint in Claude's colour (no left bar). --row-claude is set per-row. */
-.row-claude-working {
-  background: color-mix(in srgb, var(--row-claude, #d97757) 13%, transparent) !important;
+/* A subtle per-state row tint (Settings → Appearance → Status → Row background). --row-bg is set per-row
+   to the chosen colour; the sidebar adds .row-bg only when that state has a colour set (else no tint). */
+.row-bg {
+  background: color-mix(in srgb, var(--row-bg) 13%, transparent) !important;
 }
 @keyframes pane-status-pulse {
   0%,
