@@ -1,14 +1,9 @@
 // Small form primitives shared by the settings sections — a labeled row, a section heading, and
 // themed select / number / text / toggle / colour controls. Keeps the sections declarative.
 import { createColorPicker } from './color-picker';
+import { createDropdown } from './dropdown';
+import { onDismissPopovers } from './popover';
 import type { StatusAnim } from '@shared/domain/status-appearance';
-
-// Fired on `document` by the settings modal (close / category switch) so any open colour-picker popover
-// tears down with the modal — closing every path, not just the pointer ones.
-const COLOR_POPOVER_DISMISS = 'settings:dismiss-color-popover';
-export function dismissColorPopovers(): void {
-  document.dispatchEvent(new Event(COLOR_POPOVER_DISMISS));
-}
 
 export const FIELD =
   'h-7 px-2 rounded-[var(--r-sm)] border border-[var(--border)] bg-[var(--bg-input)] text-[12px] ' +
@@ -49,45 +44,28 @@ export function sectionHeading(text: string): HTMLElement {
   return el;
 }
 
+/** A themed, animated dropdown (custom listbox) — the native <select> replacement. */
 export function selectControl(opts: {
   value: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
   disabled?: boolean;
-}): HTMLSelectElement {
-  const sel = document.createElement('select');
-  sel.className =
-    FIELD + ' min-w-[160px] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
-  for (const o of opts.options) {
-    const opt = document.createElement('option');
-    opt.value = o.value;
-    opt.textContent = o.label;
-    sel.append(opt);
-  }
-  sel.value = opts.value;
-  sel.disabled = opts.disabled ?? false;
-  sel.addEventListener('change', () => opts.onChange(sel.value));
-  return sel;
+}): HTMLButtonElement {
+  return createDropdown({ ...opts, minWidth: '160px' });
 }
 
 /** Animation picker for a status state: '' = Default (inherit), else Pulse / Static. */
-export function animSelect(value: StatusAnim | '', onChange: (v: StatusAnim | '') => void): HTMLSelectElement {
-  const sel = document.createElement('select');
-  sel.className = FIELD + ' cursor-pointer';
-  sel.setAttribute('aria-label', 'Animation');
-  for (const o of [
-    { value: '', label: 'Default' },
-    { value: 'pulse', label: 'Pulse' },
-    { value: 'static', label: 'Static' },
-  ]) {
-    const opt = document.createElement('option');
-    opt.value = o.value;
-    opt.textContent = o.label;
-    sel.append(opt);
-  }
-  sel.value = value;
-  sel.addEventListener('change', () => onChange(sel.value as StatusAnim | ''));
-  return sel;
+export function animSelect(value: StatusAnim | '', onChange: (v: StatusAnim | '') => void): HTMLButtonElement {
+  return createDropdown({
+    value,
+    options: [
+      { value: '', label: 'Default' },
+      { value: 'pulse', label: 'Pulse' },
+      { value: 'static', label: 'Static' },
+    ],
+    onChange: (v) => onChange(v as StatusAnim | ''),
+    ariaLabel: 'Animation',
+  });
 }
 
 export function numberControl(opts: {
@@ -133,23 +111,43 @@ export function textControl(opts: {
 }
 
 /**
- * A colour swatch (#hex) with a "Default" reset. `value` of '' means "use the theme default", in which
- * case the swatch previews `fallback`; onChange fires '' on reset, else the picked #rrggbb.
+ * A colour swatch (#hex) with a reset. Default mode: `value` of '' means "use the theme default" and the
+ * swatch previews `fallback`. `none` mode: '' means OFF (no colour) — the swatch shows a diagonal slash
+ * and the reset button reads `noneLabel` (e.g. "Off"); clicking the swatch starts the picker at `fallback`.
+ * onChange fires '' on reset, else the picked #rrggbb.
  */
-export function colorControl(opts: { value: string; fallback: string; onChange: (value: string) => void }): HTMLElement {
+export function colorControl(opts: {
+  value: string;
+  fallback: string;
+  onChange: (value: string) => void;
+  none?: boolean;
+  noneLabel?: string;
+}): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'flex items-center gap-2';
-  let current = opts.value || opts.fallback; // the live #hex shown in the swatch
+  let value = opts.value; // the stored value: '' (default / off) or a #hex
+  let current = opts.value || opts.fallback; // the #hex the picker opens at / the swatch shows when set
 
   const swatch = document.createElement('button');
   swatch.type = 'button';
   swatch.setAttribute('aria-label', 'Pick a colour');
   swatch.className = 'h-7 w-9 rounded-[var(--r-sm)] border border-[var(--border)] cursor-pointer';
-  swatch.style.background = current;
+  // 'none' mode with no colour set: a diagonal slash on the input bg reads as "off / no background".
+  const paintSwatch = (): void => {
+    if (opts.none && !value) {
+      swatch.style.background = 'var(--bg-input)';
+      swatch.style.backgroundImage =
+        'linear-gradient(to top right, transparent calc(50% - 0.6px), var(--text-disabled) calc(50% - 0.6px), var(--text-disabled) calc(50% + 0.6px), transparent calc(50% + 0.6px))';
+    } else {
+      swatch.style.backgroundImage = '';
+      swatch.style.background = current;
+    }
+  };
+  paintSwatch();
 
   const reset = document.createElement('button');
   reset.type = 'button';
-  reset.textContent = 'Default';
+  reset.textContent = opts.noneLabel ?? 'Default';
   reset.className =
     'h-7 px-2 rounded-[var(--r-sm)] border border-[var(--border)] text-[11px] cursor-pointer ' +
     'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]';
@@ -159,6 +157,7 @@ export function colorControl(opts: { value: string; fallback: string; onChange: 
   // outside pointerdown, swatch re-click, Default, OR a dismiss event the modal fires on close/category
   // switch (so a keyboard close — Escape / Ctrl+, — can't leave a zombie popover + a leaked listener).
   let pop: HTMLElement | null = null;
+  let offDismiss = (): void => {};
   const onDocDown = (e: PointerEvent): void => {
     if (pop && !pop.contains(e.target as Node) && e.target !== swatch) closePop();
   };
@@ -166,7 +165,8 @@ export function colorControl(opts: { value: string; fallback: string; onChange: 
     pop?.remove();
     pop = null;
     document.removeEventListener('pointerdown', onDocDown, true);
-    document.removeEventListener(COLOR_POPOVER_DISMISS, closePop);
+    offDismiss();
+    offDismiss = (): void => {};
   }
   swatch.addEventListener('click', () => {
     if (pop) {
@@ -174,8 +174,9 @@ export function colorControl(opts: { value: string; fallback: string; onChange: 
       return;
     }
     const picker = createColorPicker(current, (hex) => {
+      value = hex;
       current = hex;
-      swatch.style.background = hex;
+      paintSwatch();
       opts.onChange(hex);
     });
     pop = document.createElement('div');
@@ -194,12 +195,13 @@ export function colorControl(opts: { value: string; fallback: string; onChange: 
       pop.querySelector<HTMLInputElement>('input[aria-label="Hex colour"]')?.focus(); // keyboard entry point
     });
     document.addEventListener('pointerdown', onDocDown, true);
-    document.addEventListener(COLOR_POPOVER_DISMISS, closePop);
+    offDismiss = onDismissPopovers(closePop);
   });
 
   reset.addEventListener('click', () => {
+    value = '';
     current = opts.fallback;
-    swatch.style.background = current;
+    paintSwatch();
     opts.onChange('');
     closePop();
   });
@@ -241,10 +243,14 @@ export function toggle(opts: { checked: boolean; onChange: (value: boolean) => v
       'app-no-drag relative inline-flex h-[18px] w-8 shrink-0 items-center rounded-full cursor-pointer ' +
       'transition-colors duration-[var(--motion-fast)] ease-[var(--ease-out)] ' +
       (checked ? 'bg-[var(--accent)]' : 'bg-[var(--bg-active)]');
+    // Knob contrasts with its track in BOTH states: dark ink on the near-white "on" accent, a light
+    // grey on the dim "off" track. (A fixed white knob would vanish on the monochrome on-state.)
     knob.className =
-      'inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ' +
+      'inline-block h-3.5 w-3.5 rounded-full transition-[transform,background-color] ' +
       'duration-[var(--motion-fast)] ease-[var(--ease-out)] ' +
-      (checked ? 'translate-x-[15px]' : 'translate-x-[2px]');
+      (checked
+        ? 'bg-[var(--accent-text)] translate-x-[15px]'
+        : 'bg-[var(--text-secondary)] translate-x-[2px]');
   };
   btn.append(knob);
   paint();

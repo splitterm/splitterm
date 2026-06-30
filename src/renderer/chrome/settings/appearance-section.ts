@@ -2,14 +2,14 @@
 // applied live by the renderer settings-controller (which flips <html data-theme> + motion tokens).
 import { ipc } from '@platform/ipc-client';
 import type { Settings, ThemeName } from '@shared/domain/settings.schema';
-import { row, sectionHeading, selectControl, toggle, colorControl, animSelect } from './controls';
-import { STATUS_LABELS, DEFAULT_STATUS_COLORS, type StatusState } from '@shared/domain/status-appearance';
+import { row, sectionHeading, selectControl, toggle, colorControl, animSelect, textControl } from './controls';
+import { STATUS_LABELS, DEFAULT_STATUS_COLORS, DEFAULT_STATUS_TEXT, type StatusState } from '@shared/domain/status-appearance';
 
-// The colour swatch needs a #rrggbb value; fall back to the theme accent (or a default blue if
+// The colour swatch needs a #rrggbb value; fall back to the theme accent (or a neutral grey if
 // the computed token isn't a 6-digit hex) so the swatch previews the current default.
 function accentHex(): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-  return /^#[0-9a-fA-F]{6}$/.test(v) ? v : '#4493f8';
+  return /^#[0-9a-fA-F]{6}$/.test(v) ? v : '#9da0a8';
 }
 
 export function createAppearanceSection(initial: Settings): HTMLElement {
@@ -59,24 +59,55 @@ export function createAppearanceSection(initial: Settings): HTMLElement {
     },
   });
 
-  // Sidebar pane-status dots — the GLOBAL default colour + animation per state. Profiles can override
-  // these per-profile (Settings → Profiles). Each is colour (swatch + Default) + animation (Default/Pulse/Static).
+  // Sidebar pane-status — the GLOBAL default per state: dot colour + animation + custom label + an
+  // optional row background tint. Profiles can override colour/animation per-profile (Settings →
+  // Profiles). Each row is: dot colour (swatch + Default) · animation · label (blank = built-in word) ·
+  // row background (swatch + Off; Off = no tint — only Claude-working is tinted by default).
   const statusRow = (key: StatusState, hint: string): HTMLElement => {
     const ctl = document.createElement('div');
     ctl.className = 'flex items-center gap-2';
+    const text = textControl({
+      value: local.appearance.statusTexts[key],
+      placeholder: DEFAULT_STATUS_TEXT[key],
+      onChange: (v) => {
+        local.appearance.statusTexts[key] = v;
+        save();
+      },
+    });
+    text.classList.remove('min-w-[240px]');
+    text.classList.add('w-24');
+    text.setAttribute('aria-label', `${STATUS_LABELS[key]} label`);
+
+    const dotColor = colorControl({
+      value: local.appearance.statusColors[key],
+      fallback: DEFAULT_STATUS_COLORS[key],
+      onChange: (v) => {
+        local.appearance.statusColors[key] = v;
+        save();
+      },
+    });
+    dotColor.title = `${STATUS_LABELS[key]} dot colour`;
+
+    const rowColor = colorControl({
+      value: local.appearance.statusRowColors[key],
+      fallback: DEFAULT_STATUS_COLORS[key],
+      none: true,
+      noneLabel: 'Off',
+      onChange: (v) => {
+        local.appearance.statusRowColors[key] = v;
+        save();
+      },
+    });
+    rowColor.title = `${STATUS_LABELS[key]} row background (Off = none)`;
+
     ctl.append(
-      colorControl({
-        value: local.appearance.statusColors[key],
-        fallback: DEFAULT_STATUS_COLORS[key],
-        onChange: (v) => {
-          local.appearance.statusColors[key] = v;
-          save();
-        },
-      }),
+      dotColor,
       animSelect(local.appearance.statusAnimations[key], (v) => {
         local.appearance.statusAnimations[key] = v;
         save();
       }),
+      text,
+      rowColor,
     );
     return row(STATUS_LABELS[key], ctl, hint);
   };

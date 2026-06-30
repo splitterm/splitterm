@@ -25,6 +25,14 @@ body {
   user-select: none;
 }
 
+/* Text selection in editable chrome (settings inputs) — neutral + theme-driven, no OS blue, so it
+   matches the monochrome UI. The terminal draws its own selection (xterm), so this is scoped to fields. */
+input::selection,
+textarea::selection {
+  background: var(--selection);
+  color: var(--text-primary);
+}
+
 /* App grid: titlebar / body / statusbar */
 #app {
   display: grid;
@@ -47,6 +55,10 @@ body {
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   background: var(--bg-app);
+  /* The topbar/body separator lives here (not as the topbar's border-b) so it runs the FULL width:
+     it sits at the very top of the body, just below the native title-bar overlay, which therefore
+     can't cover it on the right the way it covered a topbar border-b under the window controls. */
+  border-top: 1px solid var(--border);
   transition: grid-template-columns var(--motion-base) var(--ease-out);
 }
 .body.sidebar-open {
@@ -205,6 +217,82 @@ html[data-reduce-motion='true'] {
   background: var(--bg-active);
 }
 
+/* Pop-out menu entrance — shared by the custom <select> dropdown and the new-terminal ▾ menu. A
+   compositor-only fade + lift that collapses to instant under reduce-motion via the motion tokens.
+   `pointer-events: none` until open so a still-fading-in / closing menu can't swallow a stray click. */
+.app-pop-menu {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  transform-origin: top;
+  transition:
+    opacity var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+  will-change: opacity, transform;
+}
+.app-pop-menu:not(.open) {
+  pointer-events: none;
+}
+.app-pop-menu.open {
+  opacity: 1;
+  transform: none;
+}
+
+/* Custom dropdown (settings) — the trigger button + its animated listbox menu, replacing native
+   <select> so the open list can be themed and animated (the OS draws — and can't style — a real one). */
+.app-dropdown__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-dropdown__chevron {
+  flex: none;
+  color: var(--text-secondary);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+.app-dropdown--open .app-dropdown__chevron {
+  transform: rotate(180deg);
+}
+.app-dropdown-menu {
+  position: fixed;
+  z-index: 400; /* above the dialog; matches the colour-picker popover */
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  box-shadow: 0 8px 28px -8px rgba(0, 0, 0, 0.55);
+}
+.app-dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px 0 4px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.app-dropdown-option__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-dropdown-option__check {
+  flex: none;
+  color: var(--text-secondary);
+  opacity: 0; /* reserve the gutter so labels align whether or not a row is the current value */
+}
+.app-dropdown-option[aria-selected='true'] .app-dropdown-option__check {
+  opacity: 1;
+}
+.app-dropdown-option.is-active {
+  background: var(--bg-hover);
+}
+
 /* Status bar */
 .statusbar {
   display: flex;
@@ -275,10 +363,10 @@ html[data-reduce-motion='true'] {
 .pane-status-text[data-status='attention'] {
   color: #d29922;
 }
-/* Claude Code working — a prominent row accent/wash. --row-claude is set per-row to the resolved colour. */
-.row-claude-working {
-  box-shadow: inset 2px 0 0 var(--row-claude, #d97757);
-  background: color-mix(in srgb, var(--row-claude, #d97757) 13%, transparent) !important;
+/* A subtle per-state row tint (Settings → Appearance → Status → Row background). --row-bg is set per-row
+   to the chosen colour; the sidebar adds .row-bg only when that state has a colour set (else no tint). */
+.row-bg {
+  background: color-mix(in srgb, var(--row-bg) 13%, transparent) !important;
 }
 @keyframes pane-status-pulse {
   0%,

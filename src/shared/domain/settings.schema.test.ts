@@ -45,6 +45,8 @@ describe('normalize', () => {
         focusBorderColor: '#ff8800',
         statusColors: { working: '#00ff00', claudeWorking: '#ff0000', attention: '#0000ff', exited: '#ffffff' },
         statusAnimations: { working: 'pulse', claudeWorking: 'static', attention: '', exited: 'pulse' },
+        statusTexts: { working: 'Run', claudeWorking: 'AI', attention: 'You', exited: 'Dead' },
+        statusRowColors: { working: '', claudeWorking: '#d97757', attention: '#112233', exited: '' },
       },
       font: { family: 'Fira Code', size: 16 },
       terminal: {
@@ -66,6 +68,30 @@ describe('normalize', () => {
       keybindings: { ...DEFAULTS.keybindings, splitRight: 'Ctrl+KeyD' },
     };
     expect(normalize(valid)).toEqual(valid);
+  });
+
+  describe('appearance.statusRowColors', () => {
+    it('defaults to a Claude-working tint only', () =>
+      expect(normalize({}).appearance.statusRowColors).toEqual({ working: '', claudeWorking: '#d97757', attention: '', exited: '' }));
+    it('keeps valid #hex (off = empty), rejecting junk', () => {
+      const rc = normalize({ appearance: { statusRowColors: { working: '#abc', claudeWorking: '', attention: 'red' } } }).appearance.statusRowColors;
+      expect(rc.working).toBe('#aabbcc'); // 3-digit expanded
+      expect(rc.claudeWorking).toBe(''); // explicitly off
+      expect(rc.attention).toBe(''); // not a hex
+      expect(rc.exited).toBe(''); // missing
+    });
+  });
+
+  describe('appearance.statusTexts', () => {
+    it('defaults all to empty (built-in labels)', () =>
+      expect(normalize({}).appearance.statusTexts).toEqual({ working: '', claudeWorking: '', attention: '', exited: '' }));
+    it('keeps strings (bounded) and coerces non-strings to empty', () => {
+      const st = normalize({ appearance: { statusTexts: { working: 'Busy', claudeWorking: 42, attention: 'x'.repeat(50) } } }).appearance.statusTexts;
+      expect(st.working).toBe('Busy');
+      expect(st.claudeWorking).toBe(''); // non-string → default
+      expect(st.attention).toHaveLength(24); // bounded
+      expect(st.exited).toBe(''); // missing
+    });
   });
 
   describe('appearance.statusAnimations', () => {

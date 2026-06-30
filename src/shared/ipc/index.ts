@@ -41,5 +41,22 @@ export interface SplittermApi {
   };
   app: {
     version(): Promise<string>;
+    /** theme applied + first splash frame painted — main shows the window (deferred from ready-to-show
+        so it never flashes the default-dark splash before the real theme is set) */
+    bootReady(): void;
+    /** the boot splash finished — main reveals the native window controls (hidden during boot) */
+    splashDone(): void;
+  };
+  /**
+   * Boot-time appearance snapshot, injected synchronously by the preload (via the window's
+   * additionalArguments) so the splash and the first paint can be themed BEFORE the real settings
+   * arrive over async IPC. The renderer resolves `theme`/`followOS` against the OS colour scheme
+   * exactly as settings-controller does; settings-controller then re-asserts the same values.
+   */
+  boot: {
+    /** persisted theme name (e.g. 'Dark' | 'OLED Black' | 'Light' | a user scheme) */
+    theme: string;
+    followOS: boolean;
+    reduceMotion: boolean;
   };
 }

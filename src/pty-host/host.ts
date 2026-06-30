@@ -4,9 +4,10 @@ import type { TermId } from '@shared/ids';
 import type { PortLike, SpawnRequest } from '@shared/ipc';
 import { parseRendererToHost } from '@shared/ipc';
 import type { UserProfile } from '@shared/domain/profile';
-import { spawnPty, writePty, resizePty, ackPty, killPty, killAll, rebindFirehose, hasFirehose } from './pty-manager';
+import { spawnPty, writePty, resizePty, ackPty, killPty, killAll, rebindFirehose, hasFirehose, liveSessions, emitClaudeStatus } from './pty-manager';
 import { resolveShell, detectProfiles, type ShellProfileFull } from './shell-detect';
 import { resolveLaunch, type ResolvedLaunch } from './resolve-launch';
+import { startClaudeStatusWatcher } from './claude-status';
 
 // Control messages main → host (over the utilityProcess parentPort).
 type HostControl =
@@ -83,6 +84,10 @@ parentPort?.on('message', (e) => {
       break;
   }
 });
+
+// Watch ~/.claude/sessions for per-pane Claude Code status (busy/waiting/idle), correlated to panes by
+// process tree. Runs for the host's lifetime; emits over the (current) firehose, a no-op until connected.
+startClaudeStatusWatcher({ listSessions: liveSessions, emit: emitClaudeStatus });
 
 // Detect available shell profiles off the hot path; report id+label to main for the UI.
 void detectProfiles()

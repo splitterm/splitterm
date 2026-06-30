@@ -8,9 +8,18 @@
 // either way — throughput comes from rAF batching + flow control, not transferables.)
 import type { TermId } from '../ids';
 
+/**
+ * A pane's correlated Claude Code session state, derived in the host from `~/.claude/sessions/<pid>.json`:
+ * `busy` = processing a turn → claudeWorking; `waiting` = needs the user (e.g. a permission prompt) →
+ * attention; `idle` = correlated but between turns; `none` = no Claude session is correlated to the pane
+ * (so the renderer falls back to its generic output/affordance heuristics).
+ */
+export type ClaudeStatus = 'busy' | 'waiting' | 'idle' | 'none';
+
 export type HostToRenderer =
   | { t: 'data'; id: TermId; data: string }
-  | { t: 'exit'; id: TermId; code: number; signal?: number };
+  | { t: 'exit'; id: TermId; code: number; signal?: number }
+  | { t: 'claude'; id: TermId; status: ClaudeStatus };
 
 export type RendererToHost =
   | { t: 'write'; id: TermId; data: string }
@@ -55,6 +64,10 @@ export function parseHostToRenderer(v: unknown): HostToRenderer | null {
       if (typeof v.signal === 'number') msg.signal = v.signal;
       return msg;
     }
+    case 'claude':
+      return v.status === 'busy' || v.status === 'waiting' || v.status === 'idle' || v.status === 'none'
+        ? { t: 'claude', id, status: v.status }
+        : null;
     default:
       return null;
   }

@@ -2,13 +2,14 @@
 // terminal and flushed once per animation frame (bounds render work to the refresh rate, no
 // matter the output rate). Outgoing input/resize/ack go straight over the port.
 import type { TermId } from '@shared/ids';
-import type { HostToRenderer, RendererToHost } from '@shared/ipc';
+import type { HostToRenderer, RendererToHost, ClaudeStatus } from '@shared/ipc';
 import { parseHostToRenderer } from '@shared/ipc';
 import { ipc } from './ipc-client';
 
 interface TerminalHandlers {
   onData: (data: string) => void;
   onExit: (code: number) => void;
+  onClaude?: (status: ClaudeStatus) => void;
 }
 
 // Per-terminal buffer: data chunks, plus a terminal exit code once the session ends. Both are flushed
@@ -21,6 +22,9 @@ interface Pending {
 
 const handlers = new Map<number, TerminalHandlers>();
 const pending = new Map<number, Pending>();
+// Latest Claude status per pane, kept so a 'claude' message arriving before the terminal registers
+// (or any earlier value) is delivered on registration. Low-frequency + authoritative — no rAF batching.
+const lastClaude = new Map<number, ClaudeStatus>();
 let port: MessagePort | null = null;
 let rafScheduled = false;
 
@@ -92,6 +96,10 @@ function onMessage(msg: HostToRenderer): void {
     // Buffer the exit too, so it lands after the data that preceded it on the next flush.
     bufFor(msg.id).exit = msg.code;
     scheduleFlush();
+  } else if (msg.t === 'claude') {
+    // Out-of-band control signal (not byte data), so deliver immediately rather than via the rAF flush.
+    lastClaude.set(msg.id, msg.status);
+    handlers.get(msg.id)?.onClaude?.(msg.status);
   }
 }
 
@@ -127,14 +135,22 @@ function send(msg: RendererToHost): void {
   port?.postMessage(msg);
 }
 
-export function registerTerminal(id: TermId, onData: (d: string) => void, onExit: (code: number) => void): void {
-  handlers.set(id, { onData, onExit });
+export function registerTerminal(
+  id: TermId,
+  onData: (d: string) => void,
+  onExit: (code: number) => void,
+  onClaude?: (status: ClaudeStatus) => void,
+): void {
+  handlers.set(id, { onData, onExit, onClaude });
   if (pending.has(id)) scheduleFlush(); // drain anything buffered before registration
+  const claude = lastClaude.get(id); // deliver any status that arrived before this terminal registered
+  if (claude && onClaude) onClaude(claude);
 }
 
 export function unregisterTerminal(id: TermId): void {
   handlers.delete(id);
   pending.delete(id);
+  lastClaude.delete(id);
 }
 
 export function writeToPty(id: TermId, data: string): void {

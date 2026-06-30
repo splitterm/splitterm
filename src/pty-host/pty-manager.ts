@@ -1,7 +1,7 @@
 import { spawn, type IPty } from 'node-pty';
 import fs from 'node:fs';
 import type { TermId } from '@shared/ids';
-import type { PortLike, SpawnRequest, HostToRenderer } from '@shared/ipc';
+import type { PortLike, SpawnRequest, HostToRenderer, ClaudeStatus } from '@shared/ipc';
 import { homeDir, sanitizedEnv, type ResolvedShell } from './shell-detect';
 import { withShellIntegration } from './shell-integration';
 
@@ -18,6 +18,7 @@ const STARTUP_SETTLE_MS = 250;
 
 interface Session {
   pty: IPty;
+  pid: number; // the pty shell's OS PID — used to correlate Claude sessions to this pane (claude-status.ts)
   sent: number;
   acked: number;
   paused: boolean;
@@ -89,7 +90,7 @@ export function spawnPty(id: TermId, opts: SpawnRequest, shell: ResolvedShell, s
     return;
   }
 
-  const session: Session = { pty, sent: 0, acked: 0, paused: false };
+  const session: Session = { pty, pid: pty.pid, sent: 0, acked: 0, paused: false };
   sessions.set(id, session);
 
   let startupArmed = !!(startupCommands && startupCommands.length > 0);
@@ -122,6 +123,16 @@ export function spawnPty(id: TermId, opts: SpawnRequest, shell: ResolvedShell, s
     post({ t: 'exit', id, code: exitCode, signal });
     sessions.delete(id);
   });
+}
+
+/** The live pane sessions + each one's pty shell PID — for correlating Claude sessions to panes. */
+export function liveSessions(): { id: TermId; pid: number }[] {
+  return [...sessions].map(([id, s]) => ({ id: id as TermId, pid: s.pid }));
+}
+
+/** Push a pane's correlated Claude status to the renderer over the firehose (no-op if no port yet). */
+export function emitClaudeStatus(id: TermId, status: ClaudeStatus): void {
+  post({ t: 'claude', id, status });
 }
 
 export function writePty(id: TermId, data: string): void {

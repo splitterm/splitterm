@@ -13,12 +13,12 @@
   /* Lines */
   --border: #393b40;
   --border-strong: #4e5157;
-  /* Accent */
-  --accent: #3574f0;
-  --accent-hover: #3b82f6;
-  --accent-text: #ffffff;
-  --selection: #214283;
-  --focus-ring: #3574f0;
+  /* Accent — monochrome (black-and-white UI): a near-white primary on dark surfaces, dark ink on top. */
+  --accent: #e6e8ec;
+  --accent-hover: #ffffff;
+  --accent-text: #1e1f22;
+  --selection: #2f3136;
+  --focus-ring: #e6e8ec;
   /* Text */
   --text-primary: #dfe1e5;
   --text-secondary: #9da0a8;
@@ -65,7 +65,9 @@
   --mono-font: 'Cascadia Code', 'Consolas', ui-monospace, monospace;
   --mono-size: 13px;
 
-  /* Chrome dimensions */
+  /* Chrome dimensions. --titlebar-h MUST equal TITLEBAR_H in src/main/main.ts (the topbar height); the
+     body's full-width separator (.body border-top) sits at this y. The native caption-button overlay is
+     painted 2px SHORTER (OVERLAY_H in main.ts) so its background can't clip the separator on the right. */
   --titlebar-h: 36px;
   --statusbar-h: 24px;
 
@@ -89,11 +91,12 @@
   --bg-active: #232327;
   --border: #1c1c20;
   --border-strong: #2a2a2f;
-  --accent: #4c8dff;
-  --accent-hover: #6aa1ff;
-  --accent-text: #ffffff;
-  --selection: #1e3a66;
-  --focus-ring: #4c8dff;
+  /* Accent — monochrome: a bright near-white primary on true black, black ink on top. */
+  --accent: #ededed;
+  --accent-hover: #ffffff;
+  --accent-text: #000000;
+  --selection: #232327;
+  --focus-ring: #ededed;
   --text-primary: #ededed;
   --text-secondary: #8b8d94;
   --text-disabled: #5a5c63;
@@ -128,11 +131,12 @@
   --bg-active: #d5d6db;
   --border: #ebecf0;
   --border-strong: #c9ccd6;
-  --accent: #3574f0;
-  --accent-hover: #3b82f6;
+  /* Accent — monochrome: a near-black primary on white surfaces, white ink on top. */
+  --accent: #27282e;
+  --accent-hover: #000000;
   --accent-text: #ffffff;
-  --selection: #c2d7fe;
-  --focus-ring: #3574f0;
+  --selection: #d5d6db;
+  --focus-ring: #27282e;
   --text-primary: #27282e;
   --text-secondary: #6c707e;
   --text-disabled: #a8adbd;

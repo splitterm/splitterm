@@ -6,17 +6,11 @@ import { SquareTerminal, X } from 'lucide';
 import { icon } from './icons';
 import type { PaneInfo } from '@features/tiling';
 import { getSettings } from '@platform/settings-controller';
-import { resolveStatus, type StatusState } from '@shared/domain/status-appearance';
+import { resolveStatus, DEFAULT_STATUS_TEXT, type StatusState } from '@shared/domain/status-appearance';
 
-const STATUS_LABEL: Record<string, string> = {
-  claudeWorking: 'Working',
-  working: 'Active',
-  attention: 'Needs input',
-  idle: 'Idle',
-  exited: 'Exited',
-};
-// Which statuses show a text label next to the dot. Generic 'working' (e.g. your own typing echoing)
-// is deliberately label-less — only Claude working / needs-input / exited get a prominent word.
+// Which statuses show a text label next to the dot by default. Generic 'working' (e.g. your own typing
+// echoing) is deliberately label-less — only Claude working / needs-input / exited get a prominent word.
+// A user-set custom label (appearance.statusTexts) shows regardless of this set.
 const STATUS_SHOWS_TEXT = new Set(['claudeWorking', 'attention', 'exited']);
 
 export interface Sidebar {
@@ -129,7 +123,6 @@ export function createSidebar(
 
     const update = (p: PaneInfo, index: number): void => {
       const label = p.title || `Terminal ${index + 1}`;
-      const statusLabel = STATUS_LABEL[p.status] ?? '';
       name.textContent = label;
       dot.dataset.status = p.status;
       rowEl.classList.toggle('bg-[var(--bg-active)]', p.focused);
@@ -145,26 +138,31 @@ export function createSidebar(
       if (profileStatus?.enabled === false) {
         dot.style.display = 'none'; // this profile turns status off entirely (every state, incl. idle)
         statusText.textContent = '';
-        rowEl.classList.remove('row-claude-working');
-        rowEl.style.removeProperty('--row-claude');
+        rowEl.classList.remove('row-bg');
+        rowEl.style.removeProperty('--row-bg');
         rowEl.setAttribute('aria-label', `Focus ${label}`);
         return;
       }
       const state = p.status === 'idle' ? null : (p.status as StatusState);
+      // The status word: a user-set custom label (Appearance → Status) wins, else the built-in default.
+      const custom = state ? s.appearance.statusTexts[state] : '';
+      const statusLabel = state ? custom || DEFAULT_STATUS_TEXT[state] : 'Idle';
       const resolved = state ? resolveStatus(state, profileStatus, s.appearance) : null;
       dot.style.display = '';
       dot.style.background = resolved ? resolved.color : ''; // '' → CSS dim for idle
       dot.classList.toggle('pulse', !!resolved && resolved.animated);
       dot.title = statusLabel;
-      statusText.textContent = STATUS_SHOWS_TEXT.has(p.status) ? statusLabel : '';
+      statusText.textContent = STATUS_SHOWS_TEXT.has(p.status) || custom ? statusLabel : '';
       statusText.dataset.status = p.status;
       // Colour the word only for the attention-worthy states (matches the prior design); 'exited' keeps
       // the calm dim label — its red dot already signals the exit without an alarming red word.
       const coloured = p.status === 'claudeWorking' || p.status === 'attention';
       statusText.style.color = resolved && coloured ? resolved.color : '';
-      rowEl.classList.toggle('row-claude-working', p.status === 'claudeWorking'); // prominent Claude tint
-      if (p.status === 'claudeWorking' && resolved) rowEl.style.setProperty('--row-claude', resolved.color);
-      else rowEl.style.removeProperty('--row-claude');
+      // Per-state row background tint (Appearance → Status → Row background); '' = no tint for that state.
+      const rowBg = state ? s.appearance.statusRowColors[state] : '';
+      rowEl.classList.toggle('row-bg', !!rowBg);
+      if (rowBg) rowEl.style.setProperty('--row-bg', rowBg);
+      else rowEl.style.removeProperty('--row-bg');
       rowEl.setAttribute('aria-label', `Focus ${label} — ${statusLabel}`);
     };
     return { el: rowEl, update };

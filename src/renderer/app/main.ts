@@ -16,6 +16,9 @@ import { createCommandPalette, type Command } from '../chrome/command-palette';
 import { KEYBINDINGS, ACTION_LABELS, formatChord } from '@shared/domain/keymap';
 import { toggleBroadcasting, setBroadcasting, isBroadcasting, onBroadcastChange } from '@platform/broadcast';
 
+// The boot splash + early theming run in their own entry (src/renderer/splash/boot.ts), loaded ahead
+// of this module in index.html so the animation can start before this heavy app graph finishes.
+
 // Start listening for the PTY firehose port before anything spawns.
 initPortBridge();
 
