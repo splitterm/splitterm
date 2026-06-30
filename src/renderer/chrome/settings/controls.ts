@@ -1,14 +1,9 @@
 // Small form primitives shared by the settings sections — a labeled row, a section heading, and
 // themed select / number / text / toggle / colour controls. Keeps the sections declarative.
 import { createColorPicker } from './color-picker';
+import { createDropdown } from './dropdown';
+import { onDismissPopovers } from './popover';
 import type { StatusAnim } from '@shared/domain/status-appearance';
-
-// Fired on `document` by the settings modal (close / category switch) so any open colour-picker popover
-// tears down with the modal — closing every path, not just the pointer ones.
-const COLOR_POPOVER_DISMISS = 'settings:dismiss-color-popover';
-export function dismissColorPopovers(): void {
-  document.dispatchEvent(new Event(COLOR_POPOVER_DISMISS));
-}
 
 export const FIELD =
   'h-7 px-2 rounded-[var(--r-sm)] border border-[var(--border)] bg-[var(--bg-input)] text-[12px] ' +
@@ -49,45 +44,28 @@ export function sectionHeading(text: string): HTMLElement {
   return el;
 }
 
+/** A themed, animated dropdown (custom listbox) — the native <select> replacement. */
 export function selectControl(opts: {
   value: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
   disabled?: boolean;
-}): HTMLSelectElement {
-  const sel = document.createElement('select');
-  sel.className =
-    FIELD + ' min-w-[160px] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
-  for (const o of opts.options) {
-    const opt = document.createElement('option');
-    opt.value = o.value;
-    opt.textContent = o.label;
-    sel.append(opt);
-  }
-  sel.value = opts.value;
-  sel.disabled = opts.disabled ?? false;
-  sel.addEventListener('change', () => opts.onChange(sel.value));
-  return sel;
+}): HTMLButtonElement {
+  return createDropdown({ ...opts, minWidth: '160px' });
 }
 
 /** Animation picker for a status state: '' = Default (inherit), else Pulse / Static. */
-export function animSelect(value: StatusAnim | '', onChange: (v: StatusAnim | '') => void): HTMLSelectElement {
-  const sel = document.createElement('select');
-  sel.className = FIELD + ' cursor-pointer';
-  sel.setAttribute('aria-label', 'Animation');
-  for (const o of [
-    { value: '', label: 'Default' },
-    { value: 'pulse', label: 'Pulse' },
-    { value: 'static', label: 'Static' },
-  ]) {
-    const opt = document.createElement('option');
-    opt.value = o.value;
-    opt.textContent = o.label;
-    sel.append(opt);
-  }
-  sel.value = value;
-  sel.addEventListener('change', () => onChange(sel.value as StatusAnim | ''));
-  return sel;
+export function animSelect(value: StatusAnim | '', onChange: (v: StatusAnim | '') => void): HTMLButtonElement {
+  return createDropdown({
+    value,
+    options: [
+      { value: '', label: 'Default' },
+      { value: 'pulse', label: 'Pulse' },
+      { value: 'static', label: 'Static' },
+    ],
+    onChange: (v) => onChange(v as StatusAnim | ''),
+    ariaLabel: 'Animation',
+  });
 }
 
 export function numberControl(opts: {
@@ -159,6 +137,7 @@ export function colorControl(opts: { value: string; fallback: string; onChange: 
   // outside pointerdown, swatch re-click, Default, OR a dismiss event the modal fires on close/category
   // switch (so a keyboard close — Escape / Ctrl+, — can't leave a zombie popover + a leaked listener).
   let pop: HTMLElement | null = null;
+  let offDismiss = (): void => {};
   const onDocDown = (e: PointerEvent): void => {
     if (pop && !pop.contains(e.target as Node) && e.target !== swatch) closePop();
   };
@@ -166,7 +145,8 @@ export function colorControl(opts: { value: string; fallback: string; onChange: 
     pop?.remove();
     pop = null;
     document.removeEventListener('pointerdown', onDocDown, true);
-    document.removeEventListener(COLOR_POPOVER_DISMISS, closePop);
+    offDismiss();
+    offDismiss = (): void => {};
   }
   swatch.addEventListener('click', () => {
     if (pop) {
@@ -194,7 +174,7 @@ export function colorControl(opts: { value: string; fallback: string; onChange: 
       pop.querySelector<HTMLInputElement>('input[aria-label="Hex colour"]')?.focus(); // keyboard entry point
     });
     document.addEventListener('pointerdown', onDocDown, true);
-    document.addEventListener(COLOR_POPOVER_DISMISS, closePop);
+    offDismiss = onDismissPopovers(closePop);
   });
 
   reset.addEventListener('click', () => {

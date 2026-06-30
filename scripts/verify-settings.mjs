@@ -47,17 +47,20 @@ try {
   await sleep(800);
   result.paneCount = await win.locator('[data-leaf-id]').count();
 
-  // ---- Appearance: turn OFF "Sync with OS", pick OLED Black, enable reduce motion ----
+  // ---- Appearance: turn OFF "Sync with OS", pick OLED Black via the dropdown, enable reduce motion ----
   await win.getByRole('button', { name: 'Open settings' }).click();
   await sleep(300);
   await win.locator('.settings-dialog button[data-category="appearance"]').click(); // General opens by default now
   await sleep(300);
   const switches = win.locator('.settings-dialog button[role="switch"]'); // [0]=followOS, [1]=reduceMotion
   if ((await switches.nth(0).getAttribute('aria-checked')) === 'true') {
-    await switches.nth(0).click(); // disable OS sync so the theme select is usable
+    await switches.nth(0).click(); // disable OS sync so the Theme dropdown is usable
     await sleep(150);
   }
-  await win.locator('.settings-dialog select[aria-label="Theme"]').selectOption('OLED Black'); // not the status Animation selects
+  // Theme is now a custom dropdown (not a native <select>): open it, then click the option.
+  await win.getByRole('combobox', { name: 'Theme', exact: true }).click();
+  await sleep(150);
+  await win.getByRole('option', { name: 'OLED Black', exact: true }).click();
   await sleep(300);
   await switches.nth(1).click(); // reduce motion ON
   await sleep(300);

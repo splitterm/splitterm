@@ -58,8 +58,10 @@ try {
   await sleep(500);
   result.profileListedInModal = (await win.locator('.settings-dialog').getByText('Claude', { exact: true }).count()) > 0;
 
-  // 2) Set "Claude" as the "+" default via the Profiles section's default-profile picker.
-  await win.locator('.settings-dialog select[aria-label^="Default profile"]').selectOption({ label: 'Claude' });
+  // 2) Set "Claude" as the "+" default via the Profiles section's default-profile picker (a custom dropdown).
+  await win.getByRole('combobox', { name: /^Default profile/ }).click();
+  await sleep(150);
+  await win.getByRole('option', { name: 'Claude', exact: true }).click();
   await sleep(300);
   const persisted = await win.evaluate(async () => {
     const s = await window.splitterm.settings.get();

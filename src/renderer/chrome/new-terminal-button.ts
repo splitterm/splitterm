@@ -74,7 +74,7 @@ export function createNewTerminalButton(opts: {
     let defaultId = settings?.defaultProfileId ?? ''; // which profile the "+" opens
     menu = document.createElement('div');
     menu.className =
-      'app-no-drag fixed z-50 min-w-[180px] py-1 rounded-[var(--r-md)] border border-[var(--border)] ' +
+      'app-pop-menu app-no-drag fixed z-50 min-w-[180px] py-1 rounded-[var(--r-md)] border border-[var(--border)] ' +
       'bg-[var(--bg-elevated)] shadow-[0_8px_24px_rgba(0,0,0,0.36)]';
     const rect = group.getBoundingClientRect();
     menu.style.left = `${rect.left}px`;
@@ -132,6 +132,7 @@ export function createNewTerminalButton(opts: {
     }
 
     document.body.appendChild(menu);
+    requestAnimationFrame(() => menu?.classList.add('open')); // fade + lift in on the next frame
     document.addEventListener('mousedown', onDocDown, true);
     window.addEventListener('keydown', onMenuKey, true);
   }
