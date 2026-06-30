@@ -4,8 +4,8 @@ import { DEFAULTS, normalize } from './settings.schema';
 describe('settings schema', () => {
   it('ships sane defaults', () => {
     expect(DEFAULTS.schemaVersion).toBe(1);
-    expect(DEFAULTS.appearance.theme).toBe('Dark');
-    expect(DEFAULTS.appearance.followOS).toBe(true);
+    expect(DEFAULTS.appearance.theme).toBe('OLED Black');
+    expect(DEFAULTS.appearance.followOS).toBe(false);
     expect(DEFAULTS.terminal.scrollback).toBeGreaterThan(0);
     expect(DEFAULTS.font.size).toBeGreaterThan(0);
   });

@@ -70,8 +70,10 @@ export interface Settings {
 export const DEFAULTS: Settings = {
   schemaVersion: 1,
   appearance: {
-    theme: 'Dark',
-    followOS: true,
+    // OLED Black is the out-of-the-box look. It's manual-only (followOS never selects it — it only
+    // flips Dark/Light), so OS-sync ships OFF; otherwise a fresh install would never actually show OLED.
+    theme: 'OLED Black',
+    followOS: false,
     reduceMotion: false,
     focusBorderColor: '',
     statusColors: { working: '', claudeWorking: '', attention: '', exited: '' },
